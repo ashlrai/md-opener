@@ -1,0 +1,310 @@
+/* Agent Activity drawer — left-hand overlay panel.
+   Mirror of the AI sidebar (src/styles/ai.css): position:fixed so it overlays
+   the shell without layout changes, slides in from the LEFT. All colours via
+   theme custom properties — no hard-coded palette values. */
+
+/* ===========================================================================
+   Drawer shell
+   =========================================================================== */
+
+.activity-drawer {
+  position: fixed;
+  top: 44px; /* below .titlebar */
+  left: 0;
+  bottom: 26px; /* above .statusbar */
+  width: 300px;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  box-shadow: 4px 0 24px rgba(0, 0, 0, 0.08);
+  z-index: 200;
+  /* Slide-in from left */
+  transform: translateX(-100%);
+  opacity: 0;
+  transition:
+    transform 0.16s cubic-bezier(0.32, 0, 0.15, 1),
+    opacity 0.16s ease;
+  pointer-events: none;
+}
+
+.activity-drawer.activity-drawer--open {
+  transform: translateX(0);
+  opacity: 1;
+  pointer-events: auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .activity-drawer {
+    transition: opacity 0.16s ease;
+  }
+}
+
+/* ----- Header ----- */
+
+.activity-drawer__header {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px 10px 14px;
+  border-bottom: 1px solid var(--border);
+  user-select: none;
+}
+
+.activity-drawer__heading {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.activity-drawer__title {
+  font-size: 12.5px;
+  font-weight: 650;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.activity-drawer__folder {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  padding: 1px 5px 1px 3px;
+  margin-left: -3px;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  font-size: 11px;
+  cursor: pointer;
+  transition:
+    background 0.1s ease,
+    color 0.1s ease;
+}
+.activity-drawer__folder:hover {
+  background: var(--surface-hover);
+  color: var(--text-secondary);
+}
+.activity-drawer__folder svg {
+  width: 12px;
+  height: 12px;
+  flex: 0 0 auto;
+}
+.activity-drawer__folder-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.activity-drawer__close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  cursor: pointer;
+  flex: 0 0 auto;
+  transition:
+    background 0.1s ease,
+    color 0.1s ease;
+}
+.activity-drawer__close:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+.activity-drawer__close svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* ===========================================================================
+   Empty / error state
+   =========================================================================== */
+
+.activity-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 22px;
+  gap: 10px;
+  text-align: center;
+}
+
+.activity-empty__icon {
+  font-size: 34px;
+  line-height: 1;
+}
+
+.activity-empty__title {
+  font-size: 14px;
+  font-weight: 650;
+  color: var(--text);
+  margin: 0;
+}
+
+.activity-empty__body {
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  line-height: 1.55;
+  margin: 0;
+  max-width: 240px;
+}
+
+.activity-empty__dir {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.activity-empty__cta {
+  margin-top: 6px;
+  height: 32px;
+  padding: 0 16px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--accent-contrast);
+  background: var(--accent);
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: filter 0.12s ease;
+}
+.activity-empty__cta:hover {
+  filter: brightness(1.07);
+}
+
+/* ===========================================================================
+   File list
+   =========================================================================== */
+
+.activity-list {
+  flex: 1 1 0;
+  overflow-y: auto;
+  margin: 0;
+  padding: 6px 8px;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  scrollbar-width: thin;
+}
+
+.activity-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 7px 8px;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  text-align: left;
+  color: var(--text);
+  transition: background 0.1s ease;
+}
+.activity-item:hover {
+  background: var(--surface-hover);
+}
+.activity-item--active {
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+}
+.activity-item--active:hover {
+  background: color-mix(in srgb, var(--accent) 16%, var(--surface));
+}
+
+.activity-item__icon {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  color: var(--text-muted);
+}
+.activity-item__icon svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* "New since last looked" pulse */
+.activity-item__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 60%, transparent);
+  animation: activity-pulse 1.8s ease-out infinite;
+}
+
+@keyframes activity-pulse {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 55%, transparent);
+  }
+  70% {
+    box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent) 0%, transparent);
+  }
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 0%, transparent);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .activity-item__dot {
+    animation: none;
+  }
+}
+
+.activity-item__body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.activity-item__name {
+  font-size: 12.5px;
+  font-weight: 550;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.activity-item--active .activity-item__name {
+  color: var(--accent);
+}
+
+.activity-item__meta {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: var(--text-muted);
+  min-width: 0;
+}
+.activity-item__dir {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.activity-item__sep {
+  flex: 0 0 auto;
+  opacity: 0.6;
+}
+.activity-item__time {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}

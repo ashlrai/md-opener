@@ -70,3 +70,130 @@
 .source-editor .cm-content ::selection {
   background: var(--selection) !important;
 }
+
+/* ---- Inline AI widgets (source + WYSIWYG) ----
+   A small floating overlay anchored to the active selection. Hosts the action
+   menu, a streaming "rewriting…" pill, and inline error messages. Positioned
+   with fixed coords computed from the editor's selection geometry. */
+.inline-ai {
+  position: fixed;
+  z-index: 50;
+  /* The host editors are position-relative-ish; we use viewport coords. */
+}
+
+.inline-ai-menu {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm, 6px);
+  box-shadow: var(--shadow);
+  white-space: nowrap;
+  animation: inline-ai-in 120ms ease-out;
+}
+
+.inline-ai-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  font-size: 12px;
+  line-height: 1;
+  color: var(--text);
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 120ms ease;
+}
+.inline-ai-btn:hover {
+  background: var(--surface-hover);
+}
+
+.inline-ai-divider {
+  width: 1px;
+  align-self: stretch;
+  margin: 2px 1px;
+  background: var(--border);
+}
+
+.inline-ai-pill,
+.inline-ai-error {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 9px;
+  font-size: 12px;
+  line-height: 1.2;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm, 6px);
+  box-shadow: var(--shadow);
+  animation: inline-ai-in 120ms ease-out;
+}
+
+.inline-ai-pill {
+  color: var(--text-muted);
+}
+.inline-ai-spark {
+  animation: inline-ai-pulse 1.1s ease-in-out infinite;
+}
+.inline-ai-cancel {
+  margin-left: 2px;
+  padding: 1px 5px;
+  font-family: var(--mono-font);
+  font-size: 10px;
+  color: var(--text-muted);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 120ms ease;
+}
+.inline-ai-cancel:hover {
+  background: var(--surface-hover);
+}
+
+.inline-ai-error {
+  max-width: 320px;
+  white-space: normal;
+  color: var(--text);
+  border-color: color-mix(in srgb, #d1242f 40%, var(--border));
+}
+
+@keyframes inline-ai-in {
+  from {
+    opacity: 0;
+    transform: translateY(2px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+@keyframes inline-ai-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .inline-ai-menu,
+  .inline-ai-pill,
+  .inline-ai-error {
+    animation: none;
+  }
+  .inline-ai-spark {
+    animation: none;
+  }
+  .inline-ai-btn,
+  .inline-ai-cancel {
+    transition: none;
+  }
+}

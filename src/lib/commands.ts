@@ -11,12 +11,28 @@
  * predicate for availability and a `shortcut` string if it should bind a key.
  */
 
+import { open as openDialog } from "@tauri-apps/plugin-dialog";
+import { useActivityStore } from "../store/activityStore";
 import { useAIStore } from "../store/aiStore";
 import { useDocumentStore } from "../store/documentStore";
 import { THEMES, type ThemeId, useSettingsStore } from "../store/settingsStore";
 import { useUiStore } from "../store/uiStore";
+import { unwatchDirectory } from "./activity";
 import { exportDocx, exportHtml, exportPdf } from "./export";
 import { pickAndOpen } from "./openFile";
+
+/**
+ * Prompt for a folder and start watching it for agent Markdown activity.
+ * The drawer's effects re-issue the OS watch + initial listing when the
+ * watched folder changes, so this just needs to set it (and open the drawer).
+ */
+async function pickAndWatchFolder(): Promise<void> {
+  const selected = await openDialog({ directory: true, multiple: false });
+  if (typeof selected !== "string") return;
+  await unwatchDirectory().catch(() => {});
+  useActivityStore.getState().setWatchedDir(selected);
+  useUiStore.getState().openActivity();
+}
 
 // ---------------------------------------------------------------------------
 // Types
@@ -203,6 +219,25 @@ export function getCommands(): Command[] {
       keywords: ["settings", "preferences", "config", "options"],
       shortcut: "mod+,",
       run: () => ui().openSettings(),
+    },
+
+    // ── Agent Activity ────────────────────────────────────────────────────
+    {
+      id: "view.activity.toggle",
+      title: "Toggle Agent Activity",
+      group: "View",
+      hint: "Live agent Markdown",
+      keywords: ["activity", "agent", "watch", "drawer", "files", "live"],
+      shortcut: "mod+b",
+      run: () => ui().toggleActivity(),
+    },
+    {
+      id: "file.activity.watch",
+      title: "Watch a folder…",
+      group: "File",
+      hint: "Surface agent Markdown",
+      keywords: ["watch", "folder", "activity", "agent", "monitor", "directory"],
+      run: () => pickAndWatchFolder(),
     },
 
     // ── EXTENSION POINT ──────────────────────────────────────────────────

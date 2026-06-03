@@ -11,6 +11,10 @@ interface UiState {
   openCommandPalette: () => void;
   closeCommandPalette: () => void;
   toggleCommandPalette: () => void;
+  activityOpen: boolean;
+  openActivity: () => void;
+  closeActivity: () => void;
+  toggleActivity: () => void;
 }
 
 /**
@@ -29,4 +33,8 @@ export const useUiStore = create<UiState>((set) => ({
   closeCommandPalette: () => set({ commandPaletteOpen: false }),
   toggleCommandPalette: () =>
     set((s) => ({ commandPaletteOpen: !s.commandPaletteOpen })),
+  activityOpen: false,
+  openActivity: () => set({ activityOpen: true }),
+  closeActivity: () => set({ activityOpen: false }),
+  toggleActivity: () => set((s) => ({ activityOpen: !s.activityOpen })),
 }));

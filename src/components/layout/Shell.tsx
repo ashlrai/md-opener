@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import "../../styles/ai.css";
 import { useDocumentStore } from "../../store/documentStore";
 import { useUiStore } from "../../store/uiStore";
+import { ActivityDrawer } from "../ActivityDrawer";
 import { AISidebar } from "../ai/AISidebar";
 import { SelectionPopover } from "../ai/SelectionPopover";
 import { CommandPalette } from "../CommandPalette";
@@ -76,6 +77,7 @@ export function Shell({ dragOver }: ShellProps) {
         )}
       </main>
       <StatusBar />
+      <ActivityDrawer />
       <AISidebar />
       <SelectionPopover />
       {exportOpen && <ExportDialog />}
