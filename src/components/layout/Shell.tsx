@@ -12,6 +12,7 @@ import { SourceEditor } from "../editor/SourceEditor";
 import { ExportDialog } from "../export/ExportDialog";
 import { Outline } from "../Outline";
 import { SettingsPanel } from "../settings/SettingsPanel";
+import { Toast } from "../Toast";
 import { Renderer } from "../viewer/Renderer";
 import { Welcome } from "../Welcome";
 import { ExternalChangeBanner } from "./ExternalChangeBanner";
@@ -33,6 +34,9 @@ export function Shell({ dragOver }: ShellProps) {
   const externalChange = useDocumentStore((s) => s.externalChange);
   const exportOpen = useUiStore((s) => s.exportOpen);
   const settingsOpen = useUiStore((s) => s.settingsOpen);
+  // The TabBar only renders with 2+ docs; when it does, the side docks must
+  // start below it so they don't cover the leftmost/rightmost tabs.
+  const hasTabs = useDocumentStore((s) => s.tabs.length >= 2);
   const contentRef = useRef<HTMLElement>(null);
 
   // In read mode, focus the scroller for keyboard scrolling and reset to top
@@ -51,7 +55,9 @@ export function Shell({ dragOver }: ShellProps) {
   const scrolls = viewMode === "read";
 
   return (
-    <div className={`app-shell${dragOver ? " drag-over" : ""}`}>
+    <div
+      className={`app-shell${dragOver ? " drag-over" : ""}${hasTabs ? " has-tabs" : ""}`}
+    >
       <TitleBar />
       {/* Renders nothing unless 2+ docs are open — single-doc layout unchanged. */}
       <TabBar />
@@ -88,6 +94,7 @@ export function Shell({ dragOver }: ShellProps) {
       {exportOpen && <ExportDialog />}
       {settingsOpen && <SettingsPanel />}
       <CommandPalette />
+      <Toast />
     </div>
   );
 }

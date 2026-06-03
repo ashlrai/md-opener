@@ -143,6 +143,9 @@ export function ExportDialog() {
 
   // ── Generic runner ────────────────────────────────────────────────────────
 
+  // Toasts (success / failure) are emitted by the export functions themselves
+  // (src/lib/export.ts) so the command-palette export paths get them too; the
+  // dialog just drives its own inline status + auto-close.
   async function run(label: string, fn: () => Promise<void>): Promise<void> {
     setStatus({ kind: "busy", label: `Exporting ${label}…` });
     try {

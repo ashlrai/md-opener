@@ -14,9 +14,47 @@ import {
   listMarkdownFiles,
   type MdFileInfo,
 } from "../lib/activity";
+import { useDocumentStore } from "./documentStore";
+import { toast } from "./toastStore";
 import { useUiStore } from "./uiStore";
 
 const MAX_FILES = 200;
+
+// ── New-file toast coalescing ──────────────────────────────────────────────
+// When the drawer is closed and an agent writes new Markdown, surface a single
+// info toast. A short debounce batches a burst (e.g. an agent writing several
+// files at once) into one "N new files" toast instead of spamming the stack.
+const TOAST_COALESCE_MS = 700;
+let pendingNew: MdFileInfo[] = [];
+let pendingTimer: ReturnType<typeof setTimeout> | null = null;
+
+function flushNewFileToast() {
+  pendingTimer = null;
+  const batch = pendingNew;
+  pendingNew = [];
+  if (batch.length === 0) return;
+
+  if (batch.length === 1) {
+    const f = batch[0];
+    toast.info(`New: ${f.name}`, {
+      onClick: () => {
+        void useDocumentStore.getState().openPath(f.path);
+        useUiStore.getState().openActivity();
+      },
+    });
+  } else {
+    toast.info(`${batch.length} new files`, {
+      onClick: () => useUiStore.getState().openActivity(),
+    });
+  }
+}
+
+/** Queue a newly-created file for the coalesced "New: …" toast. */
+function queueNewFileToast(file: MdFileInfo) {
+  pendingNew.push(file);
+  if (pendingTimer) clearTimeout(pendingTimer);
+  pendingTimer = setTimeout(flushNewFileToast, TOAST_COALESCE_MS);
+}
 
 interface ActivityState {
   /** Currently-watched folder (absolute), or null if none. Persisted. */
@@ -84,6 +122,14 @@ export const useActivityStore = create<ActivityState>()(
         // When the drawer is open the user is actively watching, so nothing is
         // "unseen". Otherwise track the path so the toggle can show a count.
         const drawerOpen = useUiStore.getState().activityOpen;
+        // A newly-created file the user hasn't seen yet — surface a toast (when
+        // the drawer is closed) so it isn't missed. Re-creates of an already-
+        // tracked path are skipped to avoid repeat noise.
+        const isNovel =
+          ev.kind === "created" &&
+          !drawerOpen &&
+          !get().files.some((f) => f.path === ev.path);
+        if (isNovel) queueNewFileToast(toFileInfo(ev));
         set((s) => ({
           files: upsert(s.files, toFileInfo(ev)),
           unseen:

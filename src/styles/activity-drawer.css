@@ -9,7 +9,7 @@
 
 .activity-drawer {
   position: fixed;
-  top: 44px; /* below .titlebar */
+  top: var(--dock-top, 44px); /* below .titlebar (+ tabbar when present) */
   left: 0;
   bottom: 26px; /* above .statusbar */
   width: 300px;
@@ -17,14 +17,14 @@
   flex-direction: column;
   background: var(--surface);
   border-right: 1px solid var(--border);
-  box-shadow: 4px 0 24px rgba(0, 0, 0, 0.08);
+  box-shadow: var(--shadow-lg);
   z-index: 200;
   /* Slide-in from left */
   transform: translateX(-100%);
   opacity: 0;
   transition:
-    transform 0.16s cubic-bezier(0.32, 0, 0.15, 1),
-    opacity 0.16s ease;
+    transform var(--dur) var(--ease),
+    opacity var(--dur) ease;
   pointer-events: none;
 }
 
@@ -36,7 +36,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .activity-drawer {
-    transition: opacity 0.16s ease;
+    transition: opacity var(--dur) ease;
   }
 }
 

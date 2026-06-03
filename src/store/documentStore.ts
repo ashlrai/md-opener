@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { create } from "zustand";
 import { useRecentStore } from "./recentStore";
+import { toast } from "./toastStore";
 
 export type ViewMode = "read" | "edit" | "source";
 
@@ -237,8 +238,10 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
           tabs: syncActiveTab(next),
         };
       });
+      toast.success("Saved");
     } catch (e) {
       set({ error: String(e) });
+      toast.error(`Couldn’t save: ${String(e)}`);
     }
   },
 

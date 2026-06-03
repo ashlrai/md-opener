@@ -9,7 +9,7 @@
 
 .ai-sidebar {
   position: fixed;
-  top: 44px; /* below .titlebar */
+  top: var(--dock-top, 44px); /* below .titlebar (+ tabbar when present) */
   right: 0;
   bottom: 26px; /* above .statusbar */
   width: 340px;
@@ -17,14 +17,21 @@
   flex-direction: column;
   background: var(--surface);
   border-left: 1px solid var(--border);
-  box-shadow: -4px 0 24px rgba(0, 0, 0, 0.08);
+  box-shadow: var(--shadow-lg);
   z-index: 200;
   /* Slide-in from right */
   transform: translateX(100%);
   opacity: 0;
-  transition: transform 0.22s cubic-bezier(0.32, 0, 0.15, 1),
-    opacity 0.18s ease;
+  transition:
+    transform var(--dur) var(--ease),
+    opacity var(--dur) ease;
   pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ai-sidebar {
+    transition: opacity var(--dur) ease;
+  }
 }
 
 .ai-sidebar.ai-sidebar--open {
@@ -481,9 +488,9 @@
   background: var(--bg);
   border: 1px solid var(--border-strong);
   border-radius: 9px;
-  box-shadow: var(--shadow);
+  box-shadow: var(--shadow-lg);
   /* Fade + slight scale in */
-  animation: ai-popover-in 0.12s ease;
+  animation: ai-popover-in 0.12s var(--ease-out);
 }
 
 @keyframes ai-popover-in {
@@ -494,6 +501,15 @@
   to {
     opacity: 1;
     transform: translateY(0) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ai-selection-popover {
+    animation: none;
+  }
+  .ai-cursor {
+    animation: none;
   }
 }
 

@@ -18,9 +18,9 @@
 
 import { invoke } from "@tauri-apps/api/core";
 import { save } from "@tauri-apps/plugin-dialog";
-
 // Vite ?raw imports — each resolves to the full CSS text at build time.
 import katexCss from "katex/dist/katex.min.css?raw";
+import { toast } from "../store/toastStore";
 import markdownCss from "../styles/markdown.css?raw";
 import themesCss from "../styles/themes.css?raw";
 
@@ -157,9 +157,15 @@ export async function exportHtml(title: string): Promise<void> {
     defaultPath: `${sanitizeFileName(title)}.html`,
     filters: [{ name: "HTML", extensions: ["html"] }],
   });
-  if (!path) return; // user cancelled
+  if (!path) return; // user cancelled — no toast
 
-  await invoke("write_markdown_file", { path, content: html });
+  try {
+    await invoke("write_markdown_file", { path, content: html });
+  } catch (e) {
+    toast.error(`Export failed: ${errMsg(e)}`);
+    throw e;
+  }
+  toast.success(`Exported to ${baseName(path)}`);
 }
 
 /**
@@ -194,7 +200,7 @@ export async function exportDocx(title: string): Promise<void> {
     defaultPath: `${sanitizeFileName(title)}.docx`,
     filters: [{ name: "Word Document", extensions: ["docx"] }],
   });
-  if (!path) return;
+  if (!path) return; // user cancelled — no toast
 
   const result = await HTMLtoDOCX(bodyHtml, null, {
     title,
@@ -213,7 +219,13 @@ export async function exportDocx(title: string): Promise<void> {
     bytes = new Uint8Array(result);
   }
 
-  await invoke("write_file_bytes", { path, data: Array.from(bytes) });
+  try {
+    await invoke("write_file_bytes", { path, data: Array.from(bytes) });
+  } catch (e) {
+    toast.error(`Export failed: ${errMsg(e)}`);
+    throw e;
+  }
+  toast.success(`Exported to ${baseName(path)}`);
 }
 
 /**
@@ -254,6 +266,7 @@ export async function exportPdf(_title: string): Promise<void> {
         setTimeout(() => {
           try {
             iframe.contentWindow?.print();
+            toast.success("Opened print dialog");
             // Clean up after a short delay so the print dialog has time to
             // open before we remove the iframe.
             setTimeout(() => {
@@ -292,6 +305,17 @@ export async function exportPdf(_title: string): Promise<void> {
 }
 
 // ─── util ────────────────────────────────────────────────────────────────────
+
+/** Normalise an unknown error into a user-readable string. */
+function errMsg(e: unknown): string {
+  return typeof e === "string" ? e : ((e as Error)?.message ?? String(e));
+}
+
+/** Basename of a saved path for the "Exported to …" toast. */
+function baseName(p: string): string {
+  const idx = Math.max(p.lastIndexOf("/"), p.lastIndexOf("\\"));
+  return idx === -1 ? p : p.slice(idx + 1);
+}
 
 /** Strip characters unsafe for file names, replace spaces with hyphens. */
 function sanitizeFileName(name: string): string {

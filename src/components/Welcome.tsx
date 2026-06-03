@@ -1,6 +1,7 @@
 import { pickAndOpen } from "../lib/openFile";
 import { useDocumentStore } from "../store/documentStore";
 import { useRecentStore } from "../store/recentStore";
+import { useUiStore } from "../store/uiStore";
 
 function dirOf(path: string): string {
   const parts = path.split("/");
@@ -8,21 +9,58 @@ function dirOf(path: string): string {
   return parts.join("/").replace(/^.*\/(?=[^/]+\/[^/]+$)/, "…/");
 }
 
+function OpenIcon() {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <path
+        d="M1.75 4.25c0-.69.56-1.25 1.25-1.25h3l1.5 1.75h5.5c.69 0 1.25.56 1.25 1.25v6c0 .69-.56 1.25-1.25 1.25H3c-.69 0-1.25-.56-1.25-1.25v-7.75z"
+        stroke="currentColor"
+        strokeWidth="1.3"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function WatchIcon() {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <circle cx="8" cy="8" r="2" stroke="currentColor" strokeWidth="1.3" />
+      <path
+        d="M2 8s2.5-4 6-4 6 4 6 4-2.5 4-6 4-6-4-6-4z"
+        stroke="currentColor"
+        strokeWidth="1.3"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 export function Welcome() {
   const recents = useRecentStore((s) => s.recents);
   const openPath = useDocumentStore((s) => s.openPath);
+  const openActivity = useUiStore((s) => s.openActivity);
+  const openCommandPalette = useUiStore((s) => s.openCommandPalette);
 
   return (
     <div className="welcome">
-      <div className="welcome-mark">M</div>
+      <div className="welcome-mark" aria-hidden="true">
+        M
+      </div>
       <h1>Ashlr MD</h1>
       <p>
-        A fast, beautiful home for your Markdown files. Drop a <code>.md</code> here, or
-        open one — it just looks right.
+        A fast, beautiful home for your Markdown. Open a file to read or edit it — or
+        point Ashlr at a folder and watch your agent’s notes land live.
       </p>
+
       <div className="welcome-actions">
         <button className="btn-primary" type="button" onClick={() => pickAndOpen()}>
-          Open a Markdown file
+          <OpenIcon />
+          Open a file
+        </button>
+        <button className="btn-secondary" type="button" onClick={() => openActivity()}>
+          <WatchIcon />
+          Watch a folder
         </button>
       </div>
 
@@ -47,10 +85,13 @@ export function Welcome() {
         </div>
       )}
 
-      <div className="welcome-hint">
-        Tip: set Ashlr MD as your default — right-click any <code>.md</code> → Open With
-        → Always Open With
-      </div>
+      <button
+        type="button"
+        className="welcome-hint welcome-hint-btn"
+        onClick={() => openCommandPalette()}
+      >
+        Press <kbd>⌘K</kbd> for everything — open, export, theme, AI
+      </button>
     </div>
   );
 }

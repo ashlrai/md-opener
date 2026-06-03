@@ -144,7 +144,9 @@ export function TitleBar() {
           className={`tb-btn${aiOpen ? " active" : ""}`}
           type="button"
           onClick={() => toggleAI()}
-          title="AI assistant (⌘K)"
+          title="AI assistant (⌘L)"
+          aria-label="Toggle AI assistant"
+          aria-pressed={aiOpen}
         >
           <AIIcon />
           AI
@@ -154,6 +156,7 @@ export function TitleBar() {
           type="button"
           onClick={() => openSettings()}
           title="Preferences (⌘,)"
+          aria-label="Open preferences"
         >
           <GearIcon />
         </button>
@@ -162,6 +165,7 @@ export function TitleBar() {
           type="button"
           onClick={cycleTheme}
           title={`Theme: ${themeLabel} (⌘⇧L)`}
+          aria-label={`Switch theme (current: ${themeLabel})`}
         >
           <ThemeIcon />
         </button>

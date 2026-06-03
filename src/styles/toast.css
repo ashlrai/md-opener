@@ -1,0 +1,168 @@
+/* toast.css — transient notification stack.
+   Bottom-right, above the status bar. Shares the app's elevation, radius, and
+   motion vocabulary (var(--shadow-lg), var(--radius), var(--ease)). Themed via
+   tokens only; reduced-motion aware. Sits above the side docks (z 200) but
+   below the command palette (z 400). */
+
+.toast-stack {
+  position: fixed;
+  right: 16px;
+  bottom: 38px; /* clears the 26px status bar with breathing room */
+  z-index: 350;
+  display: flex;
+  flex-direction: column-reverse; /* newest nearest the bottom */
+  align-items: flex-end;
+  gap: 8px;
+  pointer-events: none; /* only the toasts themselves catch clicks */
+  max-width: min(360px, calc(100vw - 32px));
+}
+
+.toast {
+  pointer-events: auto;
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  min-width: 220px;
+  max-width: 100%;
+  padding: 2px 2px 2px 0;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lg);
+  font-family: var(--ui-font);
+  overflow: hidden;
+  animation: toast-in 0.18s var(--ease-out);
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toast {
+    animation: none;
+  }
+}
+
+/* ── Body (icon + message) ─────────────────────────────────────────────── */
+
+.toast__body {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+  padding: 10px 6px 10px 12px;
+  background: transparent;
+  border: none;
+  text-align: left;
+  color: var(--text);
+  font: inherit;
+}
+
+.toast__body--action {
+  cursor: pointer;
+  border-radius: calc(var(--radius) - 2px);
+  transition: background var(--dur-fast) var(--ease);
+}
+.toast__body--action:hover {
+  background: var(--surface-hover);
+}
+
+.toast__icon {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+}
+.toast__icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.toast__message {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  line-height: 1.4;
+  font-weight: 500;
+  /* Allow up to ~2 lines, then ellipsis — keeps toasts compact. */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* ── Close button ──────────────────────────────────────────────────────── */
+
+.toast__close {
+  flex: 0 0 auto;
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  margin-right: 4px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition:
+    background var(--dur-fast) var(--ease),
+    color var(--dur-fast) var(--ease);
+}
+.toast__close:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+.toast__close svg {
+  width: 11px;
+  height: 11px;
+}
+
+/* ── Kind accents — a coloured icon + left rail, calm not loud ──────────── */
+
+.toast--success .toast__icon {
+  color: #16a34a;
+}
+:root[data-theme="midnight"] .toast--success .toast__icon {
+  color: #4ade80;
+}
+.toast--success {
+  border-left: 3px solid #16a34a;
+}
+:root[data-theme="midnight"] .toast--success {
+  border-left-color: #4ade80;
+}
+
+.toast--error .toast__icon {
+  color: #dc2626;
+}
+:root[data-theme="midnight"] .toast--error .toast__icon {
+  color: #f87171;
+}
+.toast--error {
+  border-left: 3px solid #dc2626;
+}
+:root[data-theme="midnight"] .toast--error {
+  border-left-color: #f87171;
+}
+
+.toast--info .toast__icon {
+  color: var(--accent);
+}
+.toast--info {
+  border-left: 3px solid var(--accent);
+}
