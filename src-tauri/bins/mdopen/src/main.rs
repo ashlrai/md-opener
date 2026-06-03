@@ -1,4 +1,4 @@
-//! `mdopen` — open a Markdown file in MD Opener from any terminal or agent.
+//! `mdopen` — open a Markdown file in Ashlr MD from any terminal or agent.
 //!
 //! Usage:
 //!   mdopen <file.md>          open a file
@@ -8,7 +8,7 @@
 //!
 //! The tool resolves the path to an absolute path, percent-encodes it, and
 //! invokes `open "mdopener://open?path=…"` — which either brings the running
-//! MD Opener window to the front or cold-starts the app.
+//! Ashlr MD window to the front or cold-starts the app.
 //!
 //! This binary is intentionally tiny: std only + urlencoding.  It is bundled
 //! as a Tauri sidecar and also installed to /usr/local/bin by the in-app
@@ -121,7 +121,7 @@ fn open_in_app(abs_path: &str, mode: Option<&str>) {
 
 fn print_help() {
     eprintln!(
-        "mdopen — open Markdown files in MD Opener
+        "mdopen — open Markdown files in Ashlr MD
 
 USAGE:
     mdopen [FLAGS] <file.md>
@@ -139,7 +139,7 @@ EXAMPLES:
 
 The tool resolves the file path to absolute, then calls:
     open \"mdopener://open?path=<encoded-path>\"
-which forwards to the running MD Opener app (or launches it).
+which forwards to the running Ashlr MD app (or launches it).
 "
     );
 }

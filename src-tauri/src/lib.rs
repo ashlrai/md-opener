@@ -1,4 +1,4 @@
-//! MD Opener — Tauri application entry point.
+//! Ashlr MD — Tauri application entry point.
 
 mod afm;
 mod ai;
@@ -58,7 +58,7 @@ pub fn run() {
             Ok(())
         })
         .build(tauri::generate_context!())
-        .expect("error while building MD Opener")
+        .expect("error while building Ashlr MD")
         .run(|app_handle, event| match event {
             tauri::RunEvent::Opened { urls } => {
                 file_handler::handle_opened(app_handle, urls);

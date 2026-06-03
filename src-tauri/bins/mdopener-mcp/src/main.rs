@@ -1,10 +1,10 @@
-//! MD Opener MCP server — stdio JSON-RPC 2.0 bridge for coding agents.
+//! Ashlr MD MCP server — stdio JSON-RPC 2.0 bridge for coding agents.
 //!
 //! Implements the [Model Context Protocol](https://modelcontextprotocol.io/)
-//! over stdin/stdout so tools like Claude Code can drive MD Opener as a tool.
+//! over stdin/stdout so tools like Claude Code can drive Ashlr MD as a tool.
 //!
 //! ## IPC
-//! The running MD Opener app starts a loopback HTTP server and writes its port
+//! The running Ashlr MD app starts a loopback HTTP server and writes its port
 //! to `~/.mdopener/ipc-port`.  This binary reads that file to find the app.
 //! If the file is absent, most tools return an error; `open_file` is the
 //! exception — it can launch the app via the `mdopener://` URL scheme.
@@ -152,7 +152,7 @@ fn tool_list() -> Value {
     json!([
         {
             "name": "open_file",
-            "description": "Open a Markdown file in MD Opener. Launches the app if it is not already running.",
+            "description": "Open a Markdown file in Ashlr MD. Launches the app if it is not already running.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -171,7 +171,7 @@ fn tool_list() -> Value {
         },
         {
             "name": "get_current_content",
-            "description": "Return the path and full Markdown content of the document currently open in MD Opener.",
+            "description": "Return the path and full Markdown content of the document currently open in Ashlr MD.",
             "inputSchema": {
                 "type": "object",
                 "properties": {}
@@ -179,7 +179,7 @@ fn tool_list() -> Value {
         },
         {
             "name": "set_content",
-            "description": "Replace the content of the currently open document in MD Opener.",
+            "description": "Replace the content of the currently open document in Ashlr MD.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -340,7 +340,7 @@ fn read_ipc_port() -> Result<u16, String> {
         .ok_or("Cannot determine home directory")?;
 
     let content = std::fs::read_to_string(&path)
-        .map_err(|_| "~/.mdopener/ipc-port not found — is MD Opener running?".to_string())?;
+        .map_err(|_| "~/.mdopener/ipc-port not found — is Ashlr MD running?".to_string())?;
 
     content
         .trim()
@@ -449,7 +449,7 @@ fn tool_result(id: Value, value: Value) -> Response {
 fn app_not_running_msg(err: &str) -> String {
     if err.contains("ipc-port") || err.contains("not found") || err.contains("connect") {
         format!(
-            "MD Opener does not appear to be running ({}). \
+            "Ashlr MD does not appear to be running ({}). \
              Launch it first, or use open_file which can start it automatically.",
             err
         )

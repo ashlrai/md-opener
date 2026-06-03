@@ -1,34 +1,9 @@
 /**
- * CodeActions.tsx
- *
- * Renders the header action buttons for code blocks:
- *   - Copy button (all languages)
- *   - Run button (bash / sh / zsh only) — shows a confirm dialog, then fires
- *     the `onRun(cmd)` callback. The actual shell execution is the integrator's
- *     responsibility via a Tauri command (see INTEGRATION notes below).
- *
- * Usage inside CodeBlock.tsx:
- *   <CodeActions code={code} lang={lang} onRun={handleRun} />
- *
- * ─── INTEGRATION NOTE ────────────────────────────────────────────────────────
- * To wire the Run button to the system shell, add to src-tauri/src/lib.rs:
- *
- *   // TODO(integrator): add tauri-plugin-shell to Cargo.toml and Tauri config,
- *   // then replace this stub with a real shell spawn.
- *   #[tauri::command]
- *   async fn run_shell(cmd: String) -> Result<String, String> {
- *     // stub — replace with tauri_plugin_shell::open or Command::new("sh")
- *     Err(format!("run_shell not yet implemented: {cmd}"))
- *   }
- *
- * And register it in the builder:
- *   .invoke_handler(tauri::generate_handler![run_shell, …])
- *
- * In CodeBlock.tsx, the onRun handler would be:
- *   async function handleRun(cmd: string) {
- *     await invoke("run_shell", { cmd });
- *   }
- * ─────────────────────────────────────────────────────────────────────────────
+ * Header action buttons for a code block:
+ *   - Copy (all languages)
+ *   - Run (bash / sh / zsh only) — shows an inline "Run this command?" confirm,
+ *     then calls `onRun(cmd)`. CodeBlock wires that to the `run_shell` Tauri
+ *     command and renders the output; nothing runs without explicit confirmation.
  */
 
 import { type MouseEvent, useCallback, useRef, useState } from "react";
