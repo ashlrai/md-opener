@@ -1,0 +1,491 @@
+/* Settings / Preferences modal.
+   Mirrors the export-dialog aesthetic: backdrop blur, slide-in card,
+   rounded corners, soft shadow. All colours are theme tokens. */
+
+/* ── Backdrop ──────────────────────────────────────────────────────────────── */
+.settings-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: color-mix(in srgb, var(--text) 30%, transparent);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: settings-fade-in 0.15s ease;
+}
+
+@keyframes settings-fade-in {
+  from { opacity: 0 }
+  to   { opacity: 1 }
+}
+
+/* ── Panel card ────────────────────────────────────────────────────────────── */
+.settings-panel {
+  position: relative;
+  width: 480px;
+  max-width: calc(100vw - 32px);
+  max-height: calc(100vh - 80px);
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+  animation: settings-slide-in 0.18s cubic-bezier(0.34, 1.4, 0.64, 1);
+}
+
+@keyframes settings-slide-in {
+  from { opacity: 0; transform: translateY(10px) scale(0.97) }
+  to   { opacity: 1; transform: translateY(0)   scale(1)    }
+}
+
+/* ── Header ────────────────────────────────────────────────────────────────── */
+.settings-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 20px 16px;
+  border-bottom: 1px solid var(--border);
+  flex: 0 0 auto;
+}
+
+.settings-title {
+  font-size: 15px;
+  font-weight: 650;
+  color: var(--text);
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+
+.settings-close-btn {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+  flex: 0 0 auto;
+}
+.settings-close-btn:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+.settings-close-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* ── Scrollable body ───────────────────────────────────────────────────────── */
+.settings-body {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 8px 0;
+  /* Custom scrollbar — subtle, theme-aware */
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+.settings-body::-webkit-scrollbar {
+  width: 6px;
+}
+.settings-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+.settings-body::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 3px;
+}
+
+/* ── Divider ───────────────────────────────────────────────────────────────── */
+.settings-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 4px 20px;
+}
+
+/* ── Section ───────────────────────────────────────────────────────────────── */
+.settings-section {
+  padding: 12px 20px 16px;
+}
+
+.settings-section-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.settings-section-icon {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  color: var(--accent);
+  flex: 0 0 auto;
+}
+.settings-section-icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.settings-section-title {
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  margin: 0;
+}
+
+/* ── Two-column control row ────────────────────────────────────────────────── */
+.settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 34px;
+  margin-bottom: 10px;
+}
+.settings-row:last-child {
+  margin-bottom: 0;
+}
+
+.settings-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+  flex: 0 0 auto;
+}
+
+/* ── Theme picker ──────────────────────────────────────────────────────────── */
+.settings-theme-picker {
+  display: flex;
+  gap: 6px;
+}
+
+.settings-theme-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  padding: 7px 12px 8px;
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease,
+    box-shadow 0.12s ease;
+  min-width: 68px;
+}
+.settings-theme-btn:hover:not(.active) {
+  background: var(--surface-hover);
+  border-color: var(--border-strong);
+}
+.settings-theme-btn.active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 18%, transparent);
+  background: color-mix(in srgb, var(--accent) 7%, var(--bg));
+}
+.settings-theme-btn:active {
+  transform: translateY(1px);
+}
+
+/* Mini swatch — tiny colour block representing the theme palette */
+.settings-theme-swatch {
+  position: relative;
+  width: 36px;
+  height: 22px;
+  border-radius: 5px;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--text) 12%, transparent);
+  flex: 0 0 auto;
+}
+
+/* Simulated "text lines" in the swatch */
+.settings-theme-swatch-text {
+  position: absolute;
+  inset: 4px 5px;
+  background: currentColor;
+  border-radius: 2px;
+  opacity: 0.35;
+  mask-image: repeating-linear-gradient(
+    to bottom,
+    black 0,
+    black 2px,
+    transparent 2px,
+    transparent 5px
+  );
+  -webkit-mask-image: repeating-linear-gradient(
+    to bottom,
+    black 0,
+    black 2px,
+    transparent 2px,
+    transparent 5px
+  );
+}
+
+/* Accent stripe on the right edge */
+.settings-theme-swatch-accent {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 5px;
+}
+
+.settings-theme-label {
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  letter-spacing: 0.01em;
+}
+.settings-theme-btn.active .settings-theme-label {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* ── Font-size stepper ─────────────────────────────────────────────────────── */
+.settings-stepper {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.settings-stepper-btn {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 30px;
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background 0.1s ease, color 0.1s ease;
+  flex: 0 0 auto;
+}
+.settings-stepper-btn:hover:not(:disabled) {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+.settings-stepper-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+.settings-stepper-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+.settings-stepper-value {
+  font-size: 13px;
+  font-weight: 550;
+  color: var(--text);
+  min-width: 44px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  /* Dividers on both sides */
+  border-left: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+  padding: 0 6px;
+  line-height: 30px;
+  user-select: none;
+}
+
+.settings-stepper-unit {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-left: 2px;
+}
+
+/* ── Shared description text ───────────────────────────────────────────────── */
+.settings-description {
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  margin: 0 0 10px;
+  line-height: 1.55;
+}
+.settings-description-muted {
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+.settings-description:last-child {
+  margin-bottom: 0;
+}
+
+/* ── Inline code chip ──────────────────────────────────────────────────────── */
+.settings-inline-code {
+  font-family: var(--mono-font);
+  font-size: 11.5px;
+  background: color-mix(in srgb, var(--text) 6%, var(--bg));
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 5px;
+  color: var(--text);
+}
+
+/* ── CLI install row ───────────────────────────────────────────────────────── */
+.settings-cli-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.settings-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 14px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--accent-contrast);
+  background: var(--accent);
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: opacity 0.12s ease, transform 0.1s ease;
+  flex: 0 0 auto;
+}
+.settings-action-btn:hover:not(:disabled) {
+  opacity: 0.88;
+}
+.settings-action-btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+.settings-action-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.settings-action-btn code {
+  font-family: var(--mono-font);
+  font-size: 11.5px;
+  background: transparent;
+  border: none;
+  padding: 0;
+  color: inherit;
+}
+
+/* Spinner animation */
+.settings-spinner {
+  width: 13px;
+  height: 13px;
+  animation: settings-spin 0.75s linear infinite;
+  flex: 0 0 auto;
+}
+@keyframes settings-spin {
+  to { transform: rotate(360deg) }
+}
+
+.settings-cli-result {
+  font-size: 12px;
+  line-height: 1.45;
+}
+.settings-result-ok {
+  color: var(--accent);
+}
+.settings-result-error {
+  color: #d1242f;
+}
+
+/* ── MCP command block ─────────────────────────────────────────────────────── */
+.settings-mcp-command-row {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  margin-bottom: 10px;
+}
+
+.settings-mcp-command {
+  font-family: var(--mono-font);
+  font-size: 11.5px;
+  color: var(--text);
+  padding: 9px 12px;
+  flex: 1;
+  /* Allow wrapping on very narrow windows */
+  word-break: break-all;
+  display: flex;
+  align-items: center;
+  line-height: 1.5;
+  /* Subtle inset */
+  background: color-mix(in srgb, var(--text) 3%, var(--bg));
+  border-right: 1px solid var(--border);
+  user-select: all;
+}
+
+.settings-copy-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 12px;
+  background: var(--surface);
+  border: none;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 550;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+  white-space: nowrap;
+  flex: 0 0 auto;
+}
+.settings-copy-btn:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+.settings-copy-btn.copied {
+  color: var(--accent);
+}
+.settings-copy-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+.settings-mcp-note {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  margin: 0;
+  line-height: 1.5;
+}
+
+/* ── Footer ────────────────────────────────────────────────────────────────── */
+.settings-footer {
+  display: flex;
+  justify-content: flex-end;
+  padding: 14px 20px;
+  border-top: 1px solid var(--border);
+  flex: 0 0 auto;
+}
+
+.settings-done-btn {
+  height: 30px;
+  padding: 0 20px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--accent-contrast);
+  background: var(--accent);
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: opacity 0.12s ease, transform 0.1s ease;
+}
+.settings-done-btn:hover {
+  opacity: 0.88;
+}
+.settings-done-btn:active {
+  transform: translateY(1px);
+}

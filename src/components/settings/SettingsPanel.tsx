@@ -1,0 +1,500 @@
+import { invoke } from "@tauri-apps/api/core";
+import { useEffect, useRef, useState } from "react";
+import { THEMES, useSettingsStore } from "../../store/settingsStore";
+import { useUiStore } from "../../store/uiStore";
+import "../../styles/settings.css";
+
+// ─── Icon components ──────────────────────────────────────────────────────────
+
+function CloseIcon() {
+  return (
+    <svg viewBox="0 0 14 14" fill="none" aria-hidden="true">
+      <path
+        d="M2 2l10 10M12 2 2 12"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+function MinusIcon() {
+  return (
+    <svg viewBox="0 0 14 14" fill="none" aria-hidden="true">
+      <path d="M3 7h8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function PlusIcon() {
+  return (
+    <svg viewBox="0 0 14 14" fill="none" aria-hidden="true">
+      <path
+        d="M7 3v8M3 7h8"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+function TerminalIcon() {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+      <rect
+        x="2"
+        y="4"
+        width="16"
+        height="12"
+        rx="2.5"
+        stroke="currentColor"
+        strokeWidth="1.4"
+      />
+      <path
+        d="M5.5 7.5 8 10l-2.5 2.5"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M10 12.5h4.5"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+function AgentIcon() {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+      <circle cx="10" cy="10" r="7" stroke="currentColor" strokeWidth="1.4" />
+      <circle cx="10" cy="10" r="2.5" stroke="currentColor" strokeWidth="1.3" />
+      <path
+        d="M10 3v1.5M10 15.5V17M3 10h1.5M15.5 10H17"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+function CopyIcon() {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <rect
+        x="5"
+        y="5"
+        width="8"
+        height="9"
+        rx="1.5"
+        stroke="currentColor"
+        strokeWidth="1.3"
+      />
+      <path
+        d="M3 11V3.5A1.5 1.5 0 0 1 4.5 2H11"
+        stroke="currentColor"
+        strokeWidth="1.3"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+function CheckIcon() {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <path
+        d="M3 8.5l3.5 3.5 6.5-7"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function SpinnerIcon() {
+  return (
+    <svg
+      className="settings-spinner"
+      viewBox="0 0 16 16"
+      fill="none"
+      aria-hidden="true"
+    >
+      <circle
+        cx="8"
+        cy="8"
+        r="6"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeDasharray="20 18"
+      />
+    </svg>
+  );
+}
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+/**
+ * Tracks the async state of the `install_cli` Tauri command.
+ * `idle`    — not yet invoked
+ * `busy`    — invocation in flight
+ * `ok`      — succeeded; `path` holds the install location
+ * `error`   — failed; `message` describes why
+ */
+type InstallStatus =
+  | { kind: "idle" }
+  | { kind: "busy" }
+  | { kind: "ok"; path: string }
+  | { kind: "error"; message: string };
+
+/**
+ * Tracks whether the "Copy" button for the MCP command has been clicked.
+ * Resets after 2 s so it's re-clickable.
+ */
+type CopyStatus = "idle" | "copied";
+
+// ─── Section header ───────────────────────────────────────────────────────────
+
+function SectionHeader({ icon, title }: { icon: React.ReactNode; title: string }) {
+  return (
+    <div className="settings-section-header">
+      <span className="settings-section-icon">{icon}</span>
+      <h3 className="settings-section-title">{title}</h3>
+    </div>
+  );
+}
+
+// ─── Theme swatch row ─────────────────────────────────────────────────────────
+
+/**
+ * Three-swatch segmented control for theme selection.
+ * Each swatch shows a tiny colour preview so the choice is visually obvious.
+ */
+const THEME_SWATCHES: Record<string, { bg: string; text: string; accent: string }> = {
+  paper: { bg: "#ffffff", text: "#1f2328", accent: "#0969da" },
+  sepia: { bg: "#f5edda", text: "#43382a", accent: "#9a5b34" },
+  midnight: { bg: "#16181d", text: "#e6e8eb", accent: "#6ba8ff" },
+};
+
+function ThemePicker() {
+  const theme = useSettingsStore((s) => s.theme);
+  const setTheme = useSettingsStore((s) => s.setTheme);
+
+  return (
+    <div className="settings-theme-picker" role="radiogroup" aria-label="Theme">
+      {THEMES.map((t) => {
+        const swatch = THEME_SWATCHES[t.id];
+        const active = theme === t.id;
+        return (
+          <button
+            key={t.id}
+            type="button"
+            role="radio"
+            aria-checked={active}
+            className={`settings-theme-btn${active ? " active" : ""}`}
+            onClick={() => setTheme(t.id)}
+            title={`Switch to ${t.label} theme`}
+          >
+            {/* Mini colour preview */}
+            <span
+              className="settings-theme-swatch"
+              style={{ background: swatch.bg }}
+              aria-hidden="true"
+            >
+              <span
+                className="settings-theme-swatch-text"
+                style={{ color: swatch.text }}
+              />
+              <span
+                className="settings-theme-swatch-accent"
+                style={{ background: swatch.accent }}
+              />
+            </span>
+            <span className="settings-theme-label">{t.label}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// ─── Font-size stepper ────────────────────────────────────────────────────────
+
+const FONT_MIN = 13;
+const FONT_MAX = 24;
+
+function FontSizeStepper() {
+  const fontSize = useSettingsStore((s) => s.fontSize);
+  const setFontSize = useSettingsStore((s) => s.setFontSize);
+
+  return (
+    <div className="settings-stepper" role="group" aria-label="Font size">
+      <button
+        type="button"
+        className="settings-stepper-btn"
+        onClick={() => setFontSize(fontSize - 1)}
+        disabled={fontSize <= FONT_MIN}
+        aria-label="Decrease font size"
+      >
+        <MinusIcon />
+      </button>
+      <span className="settings-stepper-value" aria-live="polite" aria-atomic="true">
+        {fontSize}
+        <span className="settings-stepper-unit">px</span>
+      </span>
+      <button
+        type="button"
+        className="settings-stepper-btn"
+        onClick={() => setFontSize(fontSize + 1)}
+        disabled={fontSize >= FONT_MAX}
+        aria-label="Increase font size"
+      >
+        <PlusIcon />
+      </button>
+    </div>
+  );
+}
+
+// ─── CLI install section ──────────────────────────────────────────────────────
+
+function CliSection() {
+  const [status, setStatus] = useState<InstallStatus>({ kind: "idle" });
+
+  async function install() {
+    setStatus({ kind: "busy" });
+    try {
+      const path = await invoke<string>("install_cli");
+      setStatus({ kind: "ok", path });
+    } catch (e) {
+      const msg = typeof e === "string" ? e : ((e as Error)?.message ?? String(e));
+      setStatus({ kind: "error", message: msg });
+    }
+  }
+
+  const busy = status.kind === "busy";
+
+  return (
+    <div className="settings-cli">
+      <p className="settings-description">
+        <code className="settings-inline-code">mdopen</code> is a CLI companion that
+        opens any Markdown file directly in MD Opener from your terminal.
+      </p>
+      <div className="settings-cli-row">
+        <button
+          type="button"
+          className="settings-action-btn"
+          onClick={install}
+          disabled={busy}
+          aria-busy={busy}
+        >
+          {busy && <SpinnerIcon />}
+          Install <code>mdopen</code>
+        </button>
+        {status.kind === "ok" && (
+          <span className="settings-cli-result settings-result-ok">
+            Installed at <code className="settings-inline-code">{status.path}</code>
+          </span>
+        )}
+        {status.kind === "error" && (
+          <span className="settings-cli-result settings-result-error">
+            {status.message}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── MCP section ─────────────────────────────────────────────────────────────
+
+/**
+ * The canonical MCP binary path bundled inside the .app.
+ * In development builds the sidecar lives alongside the executable, so the path
+ * will differ — users should run `cargo tauri dev` and follow the console output.
+ */
+const MCP_BINARY_PATH = "/Applications/MD Opener.app/Contents/MacOS/mdopener-mcp";
+const MCP_COMMAND = `claude mcp add mdopener ${MCP_BINARY_PATH}`;
+
+function McpSection() {
+  const [copyStatus, setCopyStatus] = useState<CopyStatus>("idle");
+
+  async function copyCommand() {
+    try {
+      await navigator.clipboard.writeText(MCP_COMMAND);
+      setCopyStatus("copied");
+      setTimeout(() => setCopyStatus("idle"), 2000);
+    } catch {
+      // Clipboard may be unavailable in some sandbox configurations — fail silently.
+    }
+  }
+
+  return (
+    <div className="settings-mcp">
+      <p className="settings-description">
+        Register MD Opener as an MCP server to let Claude Code (and compatible AI
+        agents) open, read, and edit the current document without leaving the editor.
+      </p>
+      <p className="settings-description settings-description-muted">
+        Run this once in your terminal, then restart Claude Code:
+      </p>
+      <div className="settings-mcp-command-row">
+        <code className="settings-mcp-command">{MCP_COMMAND}</code>
+        <button
+          type="button"
+          className={`settings-copy-btn${copyStatus === "copied" ? " copied" : ""}`}
+          onClick={copyCommand}
+          aria-label={copyStatus === "copied" ? "Copied!" : "Copy command"}
+          title={copyStatus === "copied" ? "Copied!" : "Copy to clipboard"}
+        >
+          {copyStatus === "copied" ? <CheckIcon /> : <CopyIcon />}
+          <span>{copyStatus === "copied" ? "Copied" : "Copy"}</span>
+        </button>
+      </div>
+      <p className="settings-mcp-note">
+        Development builds: the binary is a Tauri sidecar — path will differ. Check the
+        Tauri dev console for the exact location.
+      </p>
+    </div>
+  );
+}
+
+// ─── Main component ───────────────────────────────────────────────────────────
+
+/**
+ * Full-screen Preferences modal.
+ *
+ * Rendered at the Shell level so it floats above all app chrome.
+ * Visibility is controlled by `useUiStore.settingsOpen`.
+ *
+ * Sections:
+ *   1. Appearance  — theme picker + font-size stepper
+ *   2. Command-line tool — installs the `mdopen` CLI via Tauri IPC
+ *   3. AI agents (MCP) — one-time `claude mcp add` setup command
+ */
+export function SettingsPanel() {
+  const close = useUiStore((s) => s.closeSettings);
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  // Close on Escape (capture phase so it beats inner key handlers).
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        close();
+      }
+    }
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [close]);
+
+  // Trap focus: move to first focusable element on open.
+  useEffect(() => {
+    const first = panelRef.current?.querySelector<HTMLElement>(
+      "button:not(:disabled), [tabindex='0']",
+    );
+    first?.focus();
+  }, []);
+
+  return (
+    /* Backdrop — click outside to close */
+    <div
+      className="settings-backdrop"
+      role="presentation"
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) close();
+      }}
+    >
+      <div
+        className="settings-panel"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="settings-panel-title"
+        ref={panelRef}
+      >
+        {/* ── Header ──────────────────────────────────────────────────────── */}
+        <div className="settings-header">
+          <h2 className="settings-title" id="settings-panel-title">
+            Preferences
+          </h2>
+          <button
+            type="button"
+            className="settings-close-btn"
+            onClick={close}
+            aria-label="Close preferences"
+          >
+            <CloseIcon />
+          </button>
+        </div>
+
+        {/* ── Body ────────────────────────────────────────────────────────── */}
+        <div className="settings-body">
+          {/* 1 · Appearance */}
+          <section className="settings-section">
+            <SectionHeader
+              icon={
+                <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                  <circle
+                    cx="10"
+                    cy="10"
+                    r="7"
+                    stroke="currentColor"
+                    strokeWidth="1.4"
+                  />
+                  <path
+                    d="M10 3v1.5M10 15.5V17M3 10h1.5M15.5 10H17M5.1 5.1l1.06 1.06M13.84 13.84l1.06 1.06M5.1 14.9l1.06-1.06M13.84 6.16l1.06-1.06"
+                    stroke="currentColor"
+                    strokeWidth="1.3"
+                    strokeLinecap="round"
+                  />
+                </svg>
+              }
+              title="Appearance"
+            />
+
+            <div className="settings-row">
+              <label className="settings-label">Theme</label>
+              <ThemePicker />
+            </div>
+
+            <div className="settings-row">
+              <label className="settings-label">Font size</label>
+              <FontSizeStepper />
+            </div>
+          </section>
+
+          <div className="settings-divider" />
+
+          {/* 2 · Command-line tool */}
+          <section className="settings-section">
+            <SectionHeader icon={<TerminalIcon />} title="Command-line tool" />
+            <CliSection />
+          </section>
+
+          <div className="settings-divider" />
+
+          {/* 3 · AI agents (MCP) */}
+          <section className="settings-section">
+            <SectionHeader icon={<AgentIcon />} title="AI agents (MCP)" />
+            <McpSection />
+          </section>
+        </div>
+
+        {/* ── Footer ──────────────────────────────────────────────────────── */}
+        <div className="settings-footer">
+          <button type="button" className="settings-done-btn" onClick={close}>
+            Done
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}

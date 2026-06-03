@@ -1,0 +1,179 @@
+name: Release
+
+# Triggers on any tag that starts with "v" (e.g. v0.1.0, v1.2.3-beta.1).
+on:
+  push:
+    tags:
+      - "v*"
+
+# Only one release can be in-flight at a time for a given tag.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Build Rust sidecars (mdopen + mdopener-mcp) before the Tauri app build.
+  # Tauri bundles them as sidecar binaries; they must be compiled first so
+  # tauri-action can find them in target/release/.
+  # ---------------------------------------------------------------------------
+  sidecars:
+    name: Build sidecars
+    runs-on: macos-14
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo registry + build artefacts
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            src-tauri/target
+          key: ${{ runner.os }}-cargo-sidecars-${{ hashFiles('src-tauri/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-sidecars-
+
+      - name: Build mdopen + mdopener-mcp (release)
+        run: |
+          cargo build --release \
+            --manifest-path src-tauri/Cargo.toml \
+            -p mdopen \
+            -p mdopener-mcp
+
+      # Upload as artefact so the tauri-build job can download and bundle them.
+      - name: Upload sidecar binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: sidecars-macos
+          path: |
+            src-tauri/target/release/mdopen
+            src-tauri/target/release/mdopener-mcp
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------------------
+  # Build the Tauri app, sign + notarize if secrets are present, and publish
+  # a GitHub Release with the DMG attached.
+  # ---------------------------------------------------------------------------
+  release:
+    name: Build & release app
+    runs-on: macos-14
+    needs: sidecars
+
+    permissions:
+      contents: write   # Required to create the GitHub Release
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo registry + build artefacts
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            src-tauri/target
+          key: ${{ runner.os }}-cargo-app-${{ hashFiles('src-tauri/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-app-
+
+      - name: Install JS dependencies
+        run: bun install --frozen-lockfile
+
+      # Download the pre-built sidecar binaries into target/release/ so Tauri
+      # can bundle them without recompiling.
+      - name: Download sidecar binaries
+        uses: actions/download-artifact@v4
+        with:
+          name: sidecars-macos
+          path: src-tauri/target/release/
+
+      - name: Mark sidecar binaries executable
+        run: |
+          chmod +x src-tauri/target/release/mdopen
+          chmod +x src-tauri/target/release/mdopener-mcp
+
+      # -----------------------------------------------------------------------
+      # Optional: import Apple Developer certificate for code signing.
+      # This step is gated on the APPLE_SIGNING_IDENTITY secret being present.
+      # Without it the app still builds — just unsigned (fine for forks and
+      # CI smoke-tests).
+      # -----------------------------------------------------------------------
+      - name: Import Apple certificate
+        if: ${{ secrets.APPLE_SIGNING_IDENTITY != '' }}
+        env:
+          APPLE_CERTIFICATE:          ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+        run: |
+          # Decode the base64-encoded .p12 certificate and import it into a
+          # temporary keychain so codesign can find it during the build.
+          KEYCHAIN_PATH="$RUNNER_TEMP/app-signing.keychain-db"
+          KEYCHAIN_PASSWORD="$(openssl rand -hex 16)"
+
+          # Create a fresh keychain
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+          # Write the certificate to disk and import it
+          CERT_PATH="$RUNNER_TEMP/certificate.p12"
+          echo "$APPLE_CERTIFICATE" | base64 --decode -o "$CERT_PATH"
+          security import "$CERT_PATH" \
+            -k "$KEYCHAIN_PATH" \
+            -P "$APPLE_CERTIFICATE_PASSWORD" \
+            -T /usr/bin/codesign \
+            -T /usr/bin/productbuild
+
+          # Make the keychain the default so codesign discovers it
+          security list-keychains -d user -s "$KEYCHAIN_PATH" login.keychain
+          security set-key-partition-list \
+            -S apple-tool:,apple: \
+            -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+      # -----------------------------------------------------------------------
+      # Build the Tauri app + create the GitHub Release with the DMG.
+      # tauri-action signs via APPLE_SIGNING_IDENTITY when provided, and
+      # notarizes via APPLE_ID / APPLE_PASSWORD / APPLE_TEAM_ID.
+      # When the signing secrets are absent the build still succeeds (unsigned).
+      # -----------------------------------------------------------------------
+      - name: Build Tauri app & publish release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN:               ${{ secrets.GITHUB_TOKEN }}
+          # Code signing (omit or leave empty to build unsigned)
+          APPLE_SIGNING_IDENTITY:     ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          # Notarization (requires an Apple Developer account — $99/yr)
+          APPLE_ID:                   ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD:             ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID:              ${{ secrets.APPLE_TEAM_ID }}
+          # Tauri updater private key — see docs/RELEASING.md
+          TAURI_SIGNING_PRIVATE_KEY:  ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          tagName:       ${{ github.ref_name }}
+          releaseName:   "MD Opener ${{ github.ref_name }}"
+          releaseBody:   |
+            See the [CHANGELOG](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md) for what's new.
+          releaseDraft:  true    # Review the release notes before publishing
+          prerelease:    ${{ contains(github.ref_name, '-') }}
+          args:          "--target aarch64-apple-darwin"
+
+      # -----------------------------------------------------------------------
+      # Clean up the temporary keychain (best-effort, even if build failed).
+      # -----------------------------------------------------------------------
+      - name: Clean up keychain
+        if: ${{ always() && secrets.APPLE_SIGNING_IDENTITY != '' }}
+        run: |
+          security delete-keychain "$RUNNER_TEMP/app-signing.keychain-db" || true

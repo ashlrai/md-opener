@@ -1,0 +1,72 @@
+/* Editor surfaces: WYSIWYG (Milkdown Crepe) and raw source (CodeMirror). */
+
+/* ---- WYSIWYG (Crepe) ---- */
+.wysiwyg-editor {
+  height: 100%;
+  overflow: hidden;
+}
+
+/* Map Crepe's design tokens onto our theme tokens. Our tokens are already
+   scoped per [data-theme] on :root, so a single mapping covers all themes.
+   The compound selector outweighs Crepe's own `.milkdown` defaults. */
+.wysiwyg-editor .milkdown {
+  --crepe-color-background: var(--bg);
+  --crepe-color-on-background: var(--text);
+  --crepe-color-surface: var(--bg);
+  --crepe-color-surface-low: var(--surface);
+  --crepe-color-on-surface: var(--text);
+  --crepe-color-on-surface-variant: var(--text-secondary);
+  --crepe-color-outline: var(--border-strong);
+  --crepe-color-primary: var(--accent);
+  --crepe-color-secondary: var(--surface);
+  --crepe-color-on-secondary: var(--text);
+  --crepe-color-inverse: var(--text);
+  --crepe-color-on-inverse: var(--bg);
+  --crepe-color-inline-code: var(--accent);
+  --crepe-color-error: #d1242f;
+  --crepe-color-hover: var(--surface-hover);
+  --crepe-color-selected: var(--selection);
+  --crepe-color-inline-area: var(--surface);
+  --crepe-font-title: var(--content-font);
+  --crepe-font-default: var(--content-font);
+  --crepe-font-code: var(--mono-font);
+
+  height: 100%;
+  overflow-y: auto;
+  background: var(--bg);
+}
+
+.wysiwyg-editor .milkdown .ProseMirror {
+  max-width: var(--content-width);
+  margin: 0 auto;
+  padding: 32px 32px 160px;
+  font-size: var(--content-font-size);
+}
+
+/* ---- Source (CodeMirror) ---- */
+.source-editor {
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+}
+.source-editor .cm-editor {
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+}
+.source-editor .cm-gutters {
+  background: var(--bg);
+  color: var(--text-muted);
+  border-right: 1px solid var(--border);
+}
+.source-editor .cm-activeLineGutter,
+.source-editor .cm-activeLine {
+  background: var(--surface);
+}
+.source-editor .cm-cursor {
+  border-left-color: var(--text);
+}
+.source-editor .cm-selectionBackground,
+.source-editor .cm-content ::selection {
+  background: var(--selection) !important;
+}

@@ -1,0 +1,186 @@
+/* Export modal — backdrop + dialog chrome.
+   All colours are theme tokens so every theme is supported automatically. */
+
+/* ── Backdrop ─────────────────────────────────────────────────────────────── */
+.export-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  /* Semi-transparent overlay; color-mix keeps it theme-aware in light/dark. */
+  background: color-mix(in srgb, var(--text) 30%, transparent);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* Entrance animation */
+  animation: export-fade-in 0.15s ease;
+}
+
+@keyframes export-fade-in {
+  from { opacity: 0 }
+  to   { opacity: 1 }
+}
+
+/* ── Dialog panel ─────────────────────────────────────────────────────────── */
+.export-dialog {
+  position: relative;
+  width: 420px;
+  max-width: calc(100vw - 32px);
+  background: var(--bg);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 24px 24px 20px;
+  /* Entrance animation — slides up slightly */
+  animation: export-slide-in 0.18s cubic-bezier(0.34, 1.4, 0.64, 1);
+}
+
+@keyframes export-slide-in {
+  from { opacity: 0; transform: translateY(10px) scale(0.97) }
+  to   { opacity: 1; transform: translateY(0)   scale(1)    }
+}
+
+/* ── Header ───────────────────────────────────────────────────────────────── */
+.export-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.export-title {
+  font-size: 15px;
+  font-weight: 650;
+  color: var(--text);
+  margin: 0;
+}
+
+.export-close-btn {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+.export-close-btn:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+.export-close-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+.export-subtitle {
+  font-size: 12.5px;
+  color: var(--text-muted);
+  margin: 0 0 18px;
+}
+
+/* ── Format buttons ───────────────────────────────────────────────────────── */
+.export-formats {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+
+.export-format-btn {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  padding: 12px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.12s ease, border-color 0.12s ease,
+    box-shadow 0.12s ease;
+}
+.export-format-btn:hover:not(:disabled) {
+  background: var(--surface-hover);
+  border-color: var(--border-strong);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+}
+.export-format-btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+.export-format-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.export-format-icon {
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--accent) 12%, var(--bg));
+  border-radius: 8px;
+  color: var(--accent);
+}
+.export-format-icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.export-format-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  flex: 1;
+}
+.export-format-name {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text);
+}
+.export-format-desc {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* ── Status / feedback row ────────────────────────────────────────────────── */
+.export-status {
+  min-height: 20px;
+  font-size: 12.5px;
+  text-align: center;
+  margin-bottom: 14px;
+}
+.export-status-idle   { color: transparent }
+.export-status-busy   { color: var(--text-muted) }
+.export-status-ok     { color: var(--accent) }
+.export-status-error  { color: #d1242f }
+
+/* ── Footer ───────────────────────────────────────────────────────────────── */
+.export-footer {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.export-cancel-btn {
+  height: 30px;
+  padding: 0 16px;
+  font-size: 12.5px;
+  font-weight: 550;
+  color: var(--text-secondary);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+.export-cancel-btn:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}

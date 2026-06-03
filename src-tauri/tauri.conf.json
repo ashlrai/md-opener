@@ -1,0 +1,65 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "MD Opener",
+  "version": "0.1.0",
+  "identifier": "app.mdopener.desktop",
+  "plugins": {
+    "deep-link": {
+      "desktop": {
+        "schemes": ["mdopener"]
+      }
+    },
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDlCNzMxNEVCMzgzNTgzNzUKUldSMWd6VTQ2eFJ6bTdtaW1kcmg0Y0l2WnI1bjV6Q0ZBOTJIOG5TbFVSa2I4SVdrYzIrSDcveWYK",
+      "endpoints": [
+        "https://github.com/ashlrai/md-opener/releases/latest/download/latest.json"
+      ]
+    }
+  },
+  "build": {
+    "beforeDevCommand": "bun run dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "bun run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "MD Opener",
+        "width": 1000,
+        "height": 720,
+        "minWidth": 480,
+        "minHeight": 360,
+        "titleBarStyle": "Overlay",
+        "hiddenTitle": true,
+        "theme": null
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "createUpdaterArtifacts": true,
+    "category": "public.app-category.productivity",
+    "shortDescription": "An AI-native Markdown viewer, editor, and exporter.",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "fileAssociations": [
+      {
+        "ext": ["md", "markdown", "mdown", "mkd", "mdx"],
+        "name": "Markdown Document",
+        "description": "A Markdown text document",
+        "role": "Editor",
+        "mimeType": "text/markdown"
+      }
+    ]
+  }
+}

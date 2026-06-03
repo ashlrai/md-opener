@@ -1,0 +1,98 @@
+/* Theme tokens. Each theme overrides the custom-property contract consumed by
+   global.css and markdown.css. Switching themes = swapping these variables. */
+
+:root {
+  --content-width: 720px;
+  --content-font-size: 17px;
+
+  --ui-font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui,
+    sans-serif;
+  --content-font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI",
+    system-ui, sans-serif;
+  --mono-font: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+
+  --radius: 10px;
+  --radius-sm: 6px;
+}
+
+/* ---- Paper (clean light, default) ---- */
+:root,
+:root[data-theme="paper"] {
+  color-scheme: light;
+  --bg: #ffffff;
+  --bg-titlebar: #fbfbfccc;
+  --surface: #f6f8fa;
+  --surface-hover: #eef1f4;
+  --text: #1f2328;
+  --text-secondary: #4a5159;
+  --text-muted: #8a929b;
+  --accent: #0969da;
+  --accent-contrast: #ffffff;
+  --border: #e4e8ec;
+  --border-strong: #d0d7de;
+  --code-bg: #f6f8fa;
+  --code-border: #e4e8ec;
+  --inline-code-bg: #eef1f4;
+  --inline-code-text: #1f2328;
+  --quote-border: #d0d7de;
+  --quote-text: #59636e;
+  --table-header-bg: #f6f8fa;
+  --table-row-alt: #fafbfc;
+  --mark-bg: #fff3c4;
+  --selection: #b3d4fc;
+  --shadow: 0 1px 3px rgba(16, 22, 26, 0.08), 0 8px 24px rgba(16, 22, 26, 0.06);
+}
+
+/* ---- Sepia (warm reading) ---- */
+:root[data-theme="sepia"] {
+  color-scheme: light;
+  --bg: #f5edda;
+  --bg-titlebar: #f1e7d0cc;
+  --surface: #ece1c8;
+  --surface-hover: #e4d8bb;
+  --text: #43382a;
+  --text-secondary: #6a5b45;
+  --text-muted: #9b8a6f;
+  --accent: #9a5b34;
+  --accent-contrast: #fbf6ea;
+  --border: #ddd0b3;
+  --border-strong: #cdbf9d;
+  --code-bg: #ece1c8;
+  --code-border: #ddd0b3;
+  --inline-code-bg: #e6d9bd;
+  --inline-code-text: #43382a;
+  --quote-border: #cdbf9d;
+  --quote-text: #6a5b45;
+  --table-header-bg: #ece1c8;
+  --table-row-alt: #f0e7d2;
+  --mark-bg: #ecd98a;
+  --selection: #dcc79a;
+  --shadow: 0 1px 3px rgba(67, 56, 42, 0.1), 0 8px 24px rgba(67, 56, 42, 0.08);
+}
+
+/* ---- Midnight (dark) ---- */
+:root[data-theme="midnight"] {
+  color-scheme: dark;
+  --bg: #16181d;
+  --bg-titlebar: #1a1d23cc;
+  --surface: #1e2128;
+  --surface-hover: #262a33;
+  --text: #e6e8eb;
+  --text-secondary: #a9b1ba;
+  --text-muted: #6e7681;
+  --accent: #6ba8ff;
+  --accent-contrast: #0b1220;
+  --border: #2a2f3a;
+  --border-strong: #3a4150;
+  --code-bg: #1b1f27;
+  --code-border: #2a2f3a;
+  --inline-code-bg: #262b35;
+  --inline-code-text: #e6e8eb;
+  --quote-border: #3a4150;
+  --quote-text: #a9b1ba;
+  --table-header-bg: #1e2128;
+  --table-row-alt: #1a1d23;
+  --mark-bg: #57451f;
+  --selection: #2d4a73;
+  --shadow: 0 1px 3px rgba(0, 0, 0, 0.4), 0 12px 32px rgba(0, 0, 0, 0.3);
+}

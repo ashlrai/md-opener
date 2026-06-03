@@ -1,0 +1,473 @@
+/**
+ * callouts.css
+ *
+ * Styles for smart agent-output rendering features:
+ *   1. Callout cards (note / tip / warning / important / caution)
+ *   2. Interactive task checkboxes
+ *   3. Doc-kind badge (plan / diff / multi-file)
+ *   4. Diff code-block line backgrounds (green/red)
+ *   5. Multi-file heading + code-block styling
+ *   6. CodeActions (Run button, confirm prompt)
+ *
+ * All colors use CSS custom properties from themes.css so they work across
+ * Paper (light), Sepia (warm), and Midnight (dark) without overrides.
+ *
+ * Callout accent colors are defined as per-type HSL hues baked into the
+ * variables below, then layered with color-mix() for tinted backgrounds.
+ */
+
+/* ============================================================================
+   CALLOUT TYPE COLOR TOKENS
+   Defined here so they can be tuned per-type. We avoid adding more tokens to
+   themes.css (per task constraints) and derive everything from these + the
+   theme's --accent as a mix base.
+   ========================================================================== */
+
+:root {
+  --callout-note-color: #0969da;       /* blue */
+  --callout-tip-color: #1a7f37;        /* green */
+  --callout-warning-color: #9a6700;    /* amber */
+  --callout-important-color: #8250df;  /* purple */
+  --callout-caution-color: #cf222e;    /* red */
+}
+
+[data-theme="midnight"] {
+  --callout-note-color: #6ba8ff;
+  --callout-tip-color: #3fb950;
+  --callout-warning-color: #d29922;
+  --callout-important-color: #bc8cff;
+  --callout-caution-color: #ff7b72;
+}
+
+[data-theme="sepia"] {
+  --callout-note-color: #7a4a28;
+  --callout-tip-color: #3d6e35;
+  --callout-warning-color: #8a5a00;
+  --callout-important-color: #6a3fa0;
+  --callout-caution-color: #b02020;
+}
+
+/* ============================================================================
+   1. CALLOUT CARDS
+   ========================================================================== */
+
+.markdown-body .callout {
+  position: relative;
+  margin: 0 0 1.15em;
+  padding: 0;
+  border-radius: var(--radius);
+  border: 1px solid;
+  overflow: hidden;
+  /* Override default blockquote styles that markdown.css may apply */
+  border-left: none;
+  color: var(--text);
+}
+
+/* ── Per-type accent colors ─────────────────────────────────────────────── */
+
+.markdown-body .callout-note {
+  --callout-color: var(--callout-note-color);
+}
+.markdown-body .callout-tip {
+  --callout-color: var(--callout-tip-color);
+}
+.markdown-body .callout-warning {
+  --callout-color: var(--callout-warning-color);
+}
+.markdown-body .callout-important {
+  --callout-color: var(--callout-important-color);
+}
+.markdown-body .callout-caution {
+  --callout-color: var(--callout-caution-color);
+}
+
+/* ── Shared callout structure ──────────────────────────────────────────── */
+
+.markdown-body .callout {
+  border-color: color-mix(in srgb, var(--callout-color) 35%, var(--border));
+  background: color-mix(in srgb, var(--callout-color) 6%, var(--bg));
+  /* Prominent left accent bar */
+  border-left: 3px solid var(--callout-color);
+}
+
+.callout-header {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 14px 8px;
+  background: color-mix(in srgb, var(--callout-color) 10%, var(--surface));
+  border-bottom: 1px solid color-mix(in srgb, var(--callout-color) 20%, var(--border));
+}
+
+.callout-icon {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  color: var(--callout-color);
+}
+
+.callout-title {
+  font-size: 13px;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+  color: var(--callout-color);
+  line-height: 1;
+}
+
+.callout-body {
+  padding: 10px 14px 10px 14px;
+  font-size: 0.95em;
+  line-height: 1.65;
+}
+
+.callout-body > *:first-child {
+  margin-top: 0;
+}
+.callout-body > *:last-child {
+  margin-bottom: 0;
+}
+
+/* Slightly subdued code in callout body */
+.callout-body :not(pre) > code {
+  background: color-mix(in srgb, var(--callout-color) 12%, var(--inline-code-bg));
+}
+
+/* ============================================================================
+   2. INTERACTIVE TASK CHECKBOXES
+   ========================================================================== */
+
+/**
+ * The TaskCheckbox component renders as <input class="task-checkbox" …>.
+ * We replace the browser default with a custom styled checkbox that respects
+ * the theme accent color.
+ */
+
+.markdown-body li.task-list-item input.task-checkbox,
+.markdown-body li.task-list-item input[type="checkbox"] {
+  /* Remove browser default */
+  appearance: none;
+  -webkit-appearance: none;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+
+  width: 15px;
+  height: 15px;
+  margin: 0 0.5em 0 -1.4em;
+  vertical-align: middle;
+  border-radius: 4px;
+  border: 1.5px solid var(--border-strong);
+  background: var(--bg);
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease;
+  position: relative;
+}
+
+.markdown-body li.task-list-item input.task-checkbox:hover,
+.markdown-body li.task-list-item input[type="checkbox"]:not([disabled]):hover {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 15%, transparent);
+}
+
+.markdown-body li.task-list-item input.task-checkbox:checked,
+.markdown-body li.task-list-item input[type="checkbox"]:checked {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+/* Checkmark via pseudo-element */
+.markdown-body li.task-list-item input.task-checkbox:checked::after,
+.markdown-body li.task-list-item input[type="checkbox"]:checked::after {
+  content: "";
+  display: block;
+  width: 4px;
+  height: 7px;
+  border: 1.5px solid var(--accent-contrast);
+  border-top: none;
+  border-left: none;
+  transform: rotate(45deg) translate(-1px, -1px);
+}
+
+/* Strike-through text for completed items */
+.markdown-body li.task-list-item:has(input:checked) > p,
+.markdown-body li.task-list-item:has(input:checked) {
+  color: var(--text-muted);
+  text-decoration: line-through;
+  text-decoration-color: var(--text-muted);
+}
+
+/* But don't strike nested lists */
+.markdown-body li.task-list-item:has(input:checked) ul,
+.markdown-body li.task-list-item:has(input:checked) ol {
+  text-decoration: none;
+  color: var(--text);
+}
+
+/* ============================================================================
+   3. DOC-KIND BADGE
+   Shown at the top of the rendered document when kind != null.
+   ========================================================================== */
+
+.doc-kind-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px 3px 8px;
+  margin: 0 0 1.4em;
+  border-radius: 100px;
+  font-size: 11.5px;
+  font-weight: 650;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-secondary);
+  cursor: default;
+  user-select: none;
+}
+
+.doc-kind-badge-icon {
+  display: flex;
+  align-items: center;
+  opacity: 0.8;
+}
+
+/* Kind-specific accent */
+.doc-kind-badge[data-kind="plan"] {
+  border-color: color-mix(in srgb, var(--callout-tip-color) 30%, var(--border));
+  background: color-mix(in srgb, var(--callout-tip-color) 8%, var(--surface));
+  color: var(--callout-tip-color);
+}
+.doc-kind-badge[data-kind="diff"] {
+  border-color: color-mix(in srgb, var(--callout-note-color) 30%, var(--border));
+  background: color-mix(in srgb, var(--callout-note-color) 8%, var(--surface));
+  color: var(--callout-note-color);
+}
+.doc-kind-badge[data-kind="multi-file"] {
+  border-color: color-mix(in srgb, var(--callout-important-color) 30%, var(--border));
+  background: color-mix(in srgb, var(--callout-important-color) 8%, var(--surface));
+  color: var(--callout-important-color);
+}
+.doc-kind-badge[data-kind="generic"] {
+  color: var(--text-muted);
+}
+
+/* Progress counter inside plan badge */
+.doc-kind-badge-progress {
+  font-weight: 500;
+  opacity: 0.8;
+  font-size: 10.5px;
+  margin-left: 2px;
+}
+
+/* ============================================================================
+   4. DIFF CODE BLOCK LINE BACKGROUNDS
+   Shiki renders diff output with token class names. We also add our own layer
+   on top for the whole-line tint (Shiki's diff extension handles tokens;
+   this handles the gutter row background).
+   ========================================================================== */
+
+/**
+ * When Shiki renders a `diff` language block with the transformerNotationDiff
+ * extension, it adds data attributes or class names to <span> elements inside
+ * the highlighted lines. Without Shiki diff transformers we do a simpler
+ * approach: target lines starting with `+` or `-` via CSS where possible, or
+ * rely on Shiki's .line.diff classes when present.
+ */
+
+/* Shiki transformer-diff classes (present if transformerNotationDiff is active) */
+.code-block .shiki .line.diff.add {
+  background: color-mix(in srgb, var(--callout-tip-color) 12%, transparent);
+  display: block;
+  margin: 0 -16px;
+  padding: 0 16px;
+}
+.code-block .shiki .line.diff.remove {
+  background: color-mix(in srgb, var(--callout-caution-color) 12%, transparent);
+  display: block;
+  margin: 0 -16px;
+  padding: 0 16px;
+}
+
+/* Gutter indicators for diff lines */
+.code-block .shiki .line.diff.add::before {
+  content: "+";
+  position: absolute;
+  left: 6px;
+  color: var(--callout-tip-color);
+  font-weight: 700;
+  font-size: 12px;
+  opacity: 0.7;
+}
+.code-block .shiki .line.diff.remove::before {
+  content: "−";
+  position: absolute;
+  left: 6px;
+  color: var(--callout-caution-color);
+  font-weight: 700;
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+/* Fallback for plain diff rendering (no Shiki transformer): tint the entire
+   code-plain block for the `diff` language by targeting leading +/- tokens.
+   This is handled by the language label in the header; the CSS below just
+   ensures the plain fallback pre also has a subtle tinted border. */
+.code-block[data-lang="diff"] {
+  border-color: color-mix(in srgb, var(--callout-note-color) 25%, var(--code-border));
+}
+.code-block[data-lang="diff"] .code-block-header {
+  background: color-mix(in srgb, var(--callout-note-color) 8%, var(--code-bg));
+}
+
+/* ============================================================================
+   5. MULTI-FILE SECTION STYLING
+   ### path/to/file.ext headings get a subtle file-tab treatment when the doc
+   is detected as kind="multi-file". The DocKindBadge component adds
+   data-doc-kind="multi-file" to .markdown-body's parent.
+   ========================================================================== */
+
+[data-doc-kind="multi-file"] .markdown-body h3,
+[data-doc-kind="multi-file"] .markdown-body h4 {
+  /* Check if heading looks like a file path (contains / or .) */
+  font-family: var(--mono-font);
+  font-size: 0.88em;
+  font-weight: 600;
+  letter-spacing: 0;
+  padding: 5px 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-bottom: none;
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  margin-bottom: 0;
+  margin-top: 1.4em;
+  color: var(--text-secondary);
+}
+
+/* Code block immediately after a file heading gets connected border */
+[data-doc-kind="multi-file"] .markdown-body h3 + div.code-block,
+[data-doc-kind="multi-file"] .markdown-body h4 + div.code-block {
+  border-radius: 0 var(--radius-sm) var(--radius-sm) var(--radius-sm);
+  margin-top: 0;
+}
+
+/* ============================================================================
+   6. CODE ACTIONS (Run button + confirm dialog)
+   ========================================================================== */
+
+.code-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* Run button — shares visual language with .copy-btn */
+.run-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  padding: 0 8px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--callout-tip-color);
+  background: transparent;
+  border: 1px solid color-mix(in srgb, var(--callout-tip-color) 35%, transparent);
+  border-radius: 5px;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+}
+
+.run-btn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--callout-tip-color) 12%, transparent);
+  border-color: color-mix(in srgb, var(--callout-tip-color) 60%, transparent);
+}
+
+.run-btn.running {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* Spinner for running state */
+.run-spinner {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border: 1.5px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: run-spin 0.7s linear infinite;
+}
+
+@keyframes run-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Inline confirm prompt */
+.run-confirm {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  animation: run-confirm-in 0.1s ease;
+}
+
+@keyframes run-confirm-in {
+  from {
+    opacity: 0;
+    transform: translateX(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.run-confirm-label {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.run-confirm-yes {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 8px;
+  font-size: 11px;
+  font-weight: 650;
+  background: var(--callout-tip-color);
+  color: #fff;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: opacity 0.1s ease;
+}
+.run-confirm-yes:hover {
+  opacity: 0.88;
+}
+
+.run-confirm-no {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 8px;
+  font-size: 11px;
+  font-weight: 550;
+  background: transparent;
+  color: var(--text-muted);
+  border: 1px solid transparent;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: background 0.1s ease, color 0.1s ease;
+}
+.run-confirm-no:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
