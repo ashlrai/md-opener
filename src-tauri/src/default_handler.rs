@@ -53,7 +53,11 @@
 // Imports — platform-gated to avoid unused-import warnings on other targets.
 // ---------------------------------------------------------------------------
 
-use tauri::{AppHandle, Manager};
+use tauri::AppHandle;
+
+// `Manager` is only needed for `app.path()` in the macOS helper-binary lookup.
+#[cfg(target_os = "macos")]
+use tauri::Manager;
 
 #[cfg(target_os = "linux")]
 use std::process::Command;

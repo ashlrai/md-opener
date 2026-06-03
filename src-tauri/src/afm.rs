@@ -20,7 +20,11 @@
 //!   "ai://error"  { requestId: String, error: String }
 
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Emitter};
+use tauri::AppHandle;
+
+// `Emitter` (app.emit) is only used by the macOS streaming path.
+#[cfg(target_os = "macos")]
+use tauri::Emitter;
 
 // ---------------------------------------------------------------------------
 // Re-use the DeltaPayload / DonePayload / ErrorPayload types from ai.rs.

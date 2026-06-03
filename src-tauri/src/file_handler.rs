@@ -8,10 +8,18 @@
 //! files opened while the app is already running.
 
 use crate::PendingFiles;
-use tauri::{AppHandle, Emitter, Manager, Url};
+use tauri::{AppHandle, Manager};
+
+// Emitter and Url are only needed by the macOS-only handle_opened path.
+#[cfg(target_os = "macos")]
+use tauri::{Emitter, Url};
 
 /// Convert opened URLs into absolute file paths, buffer them, and notify the
 /// frontend. Called from the `RunEvent::Opened` arm of the run loop.
+///
+/// macOS only — other platforms receive files as CLI args (see
+/// [`buffer_cli_args`]) and deep links via the deep-link plugin.
+#[cfg(target_os = "macos")]
 pub fn handle_opened(app: &AppHandle, urls: Vec<Url>) {
     let paths: Vec<String> = urls
         .iter()

@@ -68,9 +68,13 @@ pub fn run() {
         })
         .build(tauri::generate_context!())
         .expect("error while building Ashlr MD")
-        .run(|app_handle, event| match event {
+        .run(|_app_handle, event| match event {
+            // macOS delivers Finder "open file" hand-offs via RunEvent::Opened.
+            // Windows/Linux pass the path as argv instead (see buffer_cli_args),
+            // and RunEvent::Opened doesn't exist there — so gate this arm.
+            #[cfg(target_os = "macos")]
             tauri::RunEvent::Opened { urls } => {
-                file_handler::handle_opened(app_handle, urls);
+                file_handler::handle_opened(_app_handle, urls);
             }
             tauri::RunEvent::Exit => {
                 // Remove the IPC port file so the MCP binary knows the app exited.
