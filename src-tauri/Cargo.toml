@@ -39,3 +39,7 @@ notify = "6"
 reqwest = { version = "0.12", features = ["json", "stream"] }
 futures-util = "0.3"
 tokio = { version = "1", features = ["full"] }
+
+# Windows-only: read/write HKCU registry keys for default-app association.
+[target.'cfg(windows)'.dependencies]
+winreg = "0.52"

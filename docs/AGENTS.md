@@ -29,7 +29,14 @@ Open **Preferences → AI agents (MCP)** and click **Connect to Claude Code**.
 Ashlr MD runs the following for you:
 
 ```bash
+# macOS
 claude mcp add --scope user ashlr-md /Applications/Ashlr\ MD.app/Contents/MacOS/mdopener-mcp
+
+# Windows (adjust to your actual install path)
+claude mcp add --scope user ashlr-md "%LOCALAPPDATA%\Ashlr MD\mdopener-mcp.exe"
+
+# Linux (AppImage / .deb — verify path after install)
+claude mcp add --scope user ashlr-md /usr/lib/ashlr-md/mdopener-mcp
 ```
 
 The `--scope user` flag registers the server globally (all projects), not just
@@ -38,7 +45,14 @@ the current directory.
 ### Manual
 
 ```bash
+# macOS
 claude mcp add --scope user ashlr-md "/Applications/Ashlr MD.app/Contents/MacOS/mdopener-mcp"
+
+# Windows — verify path; shown here for a typical per-user install
+claude mcp add --scope user ashlr-md "%LOCALAPPDATA%\Ashlr MD\mdopener-mcp.exe"
+
+# Linux (.deb install default; AppImage: use the resource dir inside the mount)
+claude mcp add --scope user ashlr-md /usr/lib/ashlr-md/mdopener-mcp
 ```
 
 After running either, **restart Claude Code** (or run `claude restart`) once.
@@ -47,7 +61,9 @@ After running either, **restart Claude Code** (or run `claude restart`) once.
 
 ```bash
 claude mcp list
-# should show: ashlr-md  /Applications/Ashlr MD.app/Contents/MacOS/mdopener-mcp
+# macOS:   ashlr-md  /Applications/Ashlr MD.app/Contents/MacOS/mdopener-mcp
+# Windows: ashlr-md  C:\Users\<you>\AppData\Local\Ashlr MD\mdopener-mcp.exe
+# Linux:   ashlr-md  /usr/lib/ashlr-md/mdopener-mcp
 ```
 
 ### Using the tools in Claude Code
@@ -74,7 +90,8 @@ Ashlr MD writes/merges the entry in `~/.cursor/mcp.json` for you.
 
 ### Manual
 
-Edit (or create) **`~/.cursor/mcp.json`**:
+Edit (or create) **`~/.cursor/mcp.json`** (macOS/Linux) or
+`%APPDATA%\Cursor\mcp.json` (Windows):
 
 ```json
 {
@@ -86,6 +103,11 @@ Edit (or create) **`~/.cursor/mcp.json`**:
   }
 }
 ```
+
+On **Windows**, replace `command` with the path to `mdopener-mcp.exe` in your
+install directory (e.g. `C:\Users\<you>\AppData\Local\Ashlr MD\mdopener-mcp.exe`).
+On **Linux**, use `/usr/lib/ashlr-md/mdopener-mcp` (`.deb`) or the binary inside
+the AppImage resource directory — verify the exact path after install.
 
 If the file already has other servers, merge only the `"ashlr-md"` key into the
 existing `"mcpServers"` object — don't replace the whole file.
@@ -108,11 +130,17 @@ a project-level **`.codex/config.toml`**.
 Add the following block:
 
 ```toml
-# ~/.codex/config.toml
+# ~/.codex/config.toml  (macOS/Linux)
+# %USERPROFILE%\.codex\config.toml  (Windows)
 
 [[mcp_servers]]
 name    = "ashlr-md"
+# macOS:
 command = "/Applications/Ashlr MD.app/Contents/MacOS/mdopener-mcp"
+# Windows (adjust to your install dir):
+# command = "C:\\Users\\<you>\\AppData\\Local\\Ashlr MD\\mdopener-mcp.exe"
+# Linux (.deb):
+# command = "/usr/lib/ashlr-md/mdopener-mcp"
 args    = []
 ```
 
@@ -131,13 +159,16 @@ agent tool call.
 
 ### Install
 
-In Ashlr MD: **Preferences → Command-line tool → Install mdopen**
+In Ashlr MD: **Preferences → Command-line tool → Install mdopen** (all platforms)
 
-Or via the build-from-source installer:
+Or via the build-from-source installer (macOS/Linux):
 
 ```bash
 bash <(curl -fsSL https://raw.githubusercontent.com/ashlrai/ashlr-md/main/scripts/install.sh)
 ```
+
+On **Windows**, the installer places `mdopen.exe` alongside the app. The in-app
+prompt handles adding it to your `PATH` via the system environment variable dialog.
 
 ### Usage
 
@@ -173,7 +204,14 @@ mdopener://open?path=/path/to/file.md&mode=edit
 From the terminal:
 
 ```bash
+# macOS
 open "mdopener://open?path=$(pwd)/README.md"
+
+# Windows (PowerShell)
+Start-Process "mdopener://open?path=$PWD\README.md"
+
+# Linux
+xdg-open "mdopener://open?path=$(pwd)/README.md"
 ```
 
 From JavaScript / Electron:
@@ -219,8 +257,10 @@ bash scripts/install.sh
 SKIP_APP_BUILD=1 bash scripts/install.sh
 ```
 
-The install script requires **Rust** (rustup), **Bun**, and Xcode Command Line
-Tools on macOS. See the script header for full prerequisites.
+The install script requires **Rust** (rustup) and **Bun**.
+On macOS, also Xcode Command Line Tools; on Windows, MSVC build tools; on Linux,
+`build-essential` and the [Tauri Linux dependencies](https://tauri.app/start/prerequisites/#linux).
+See the script header for full prerequisites.
 
 In a dev build the MCP binary lives at:
 
@@ -254,8 +294,10 @@ Restart Cursor. If the issue persists, open `~/.cursor/mcp.json` and confirm
 the `command` path points to the binary.
 
 **`mdopen` command not found after installing**
-Make sure `/usr/local/bin` (or `~/.local/bin`) is on your `$PATH`:
+On macOS/Linux, make sure `/usr/local/bin` (or `~/.local/bin`) is on your `$PATH`:
 ```bash
 echo $PATH          # check
 mdopen --help       # verify
 ```
+On Windows, confirm `mdopen.exe`'s directory is in your user or system `PATH`
+(the in-app installer handles this; restart your terminal after installing).

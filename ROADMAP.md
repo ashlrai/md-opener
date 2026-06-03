@@ -22,7 +22,7 @@ leaks data off-device without explicit consent. Quality over scope, every time.
 - Instant, beautiful rendering (GFM · Shiki · Mermaid · KaTeX)
 - WYSIWYG + lossless source editing, atomic save, external-change aware
 - Export to PDF / DOCX / HTML (offline, no Pandoc)
-- **Free, private, on-device AI** (Apple Foundation Models → Ollama → BYO key)
+- **Free, private, on-device AI** (Apple Foundation Models on macOS 26+ → Ollama on Windows/Linux → BYO key)
 - Agent hand-off: `mdopen` CLI · `mdopener://` scheme · **MCP server**
 - Smart agent output: callouts, interactive checkboxes, plan/diff/multi-file detection
 - Three themes, Settings, custom icon, CI + signed-release pipeline, landing site
@@ -30,8 +30,10 @@ leaks data off-device without explicit consent. Quality over scope, every time.
 ## Next
 
 **Distribution & reach**
-- [ ] Notarized DMG + Homebrew cask (needs an Apple Developer cert → see [`docs/RELEASING.md`](./docs/RELEASING.md))
-- [ ] Windows & Linux builds (Tauri makes this largely free)
+- [ ] Notarized macOS DMG + Homebrew cask (needs an Apple Developer cert → see [`docs/RELEASING.md`](./docs/RELEASING.md))
+- [ ] Windows MSI/NSIS installer (code-signing optional; SmartScreen warning until signed)
+- [ ] Linux .deb + .AppImage (unsigned)
+- [x] Windows & Linux builds (Tauri 2 cross-platform — macOS, Windows, Linux all supported)
 - [ ] Auto-update channel (plumbing is in; needs the first signed release)
 
 **Make agent output come alive (the differentiator)**

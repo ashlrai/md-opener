@@ -13,67 +13,87 @@ concurrency:
 
 jobs:
   # ---------------------------------------------------------------------------
-  # Build Rust sidecars (mdopen + mdopener-mcp) before the Tauri app build.
-  # Tauri bundles them as sidecar binaries; they must be compiled first so
-  # tauri-action can find them in target/release/.
-  # ---------------------------------------------------------------------------
-  sidecars:
-    name: Build sidecars
-    runs-on: macos-14
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install Rust (stable)
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Cache Cargo registry + build artefacts
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            src-tauri/target
-          key: ${{ runner.os }}-cargo-sidecars-${{ hashFiles('src-tauri/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-sidecars-
-
-      - name: Build mdopen + mdopener-mcp (release)
-        run: |
-          cargo build --release \
-            --manifest-path src-tauri/Cargo.toml \
-            -p mdopen \
-            -p mdopener-mcp
-
-      # Upload as artefact so the tauri-build job can download and bundle them.
-      - name: Upload sidecar binaries
-        uses: actions/upload-artifact@v4
-        with:
-          name: sidecars-macos
-          path: |
-            src-tauri/target/release/mdopen
-            src-tauri/target/release/mdopener-mcp
-          if-no-files-found: error
-
-  # ---------------------------------------------------------------------------
-  # Build the Tauri app, sign + notarize if secrets are present, and publish
-  # a GitHub Release with the DMG attached.
+  # Build matrix: macOS (aarch64 + x86_64), Linux (x86_64), Windows (x86_64).
+  #
+  # Each runner:
+  #   1. Builds its platform-specific sidecars:
+  #        macOS  → all 4 (2 Rust + 2 Swift) via scripts/build-sidecars.sh
+  #        Linux  → 2 Rust sidecars via scripts/build-sidecars.sh
+  #        Windows→ 2 Rust sidecars via `cargo build` directly (no bash)
+  #   2. Runs `tauri build` via tauri-action, which RFC-7396-merges the
+  #      platform-specific overlay so only the sidecars that exist on that OS
+  #      are included in the bundle:
+  #        tauri.macos.conf.json   → mdopen, mdopener-mcp, mdopener-afm, mdopener-setdefault
+  #        tauri.linux.conf.json   → mdopen, mdopener-mcp
+  #        tauri.windows.conf.json → mdopen.exe, mdopener-mcp.exe
+  #   3. Uploads artifacts to the same GitHub Release draft.
+  #      tauri-action appends per-platform entries to the updater latest.json
+  #      so the final release contains a unified multi-platform update manifest.
+  #
+  # Apple signing/notarization is gated behind HAS_APPLE_SIGNING so the
+  # macOS job still succeeds on forks without certificates.
   # ---------------------------------------------------------------------------
   release:
-    name: Build & release app
-    runs-on: macos-14
-    needs: sidecars
-
+    name: Build & release (${{ matrix.platform }})
     permissions:
-      contents: write   # Required to create the GitHub Release
+      contents: write   # Required to create / update the GitHub Release
 
-    # secrets can't be used in `if:` conditions, so surface the one we gate on
-    # as an env var the steps can read.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # ------------------------------------------------------------------
+          # macOS arm64 (primary shipping target, Apple Silicon)
+          # ------------------------------------------------------------------
+          - platform: macos-14
+            rust-target: aarch64-apple-darwin
+            tauri-args: "--target aarch64-apple-darwin"
+            build-sidecars: "bash scripts/build-sidecars.sh"
+            os: macOS
+
+          # ------------------------------------------------------------------
+          # macOS x86_64 (Intel Macs)
+          # ------------------------------------------------------------------
+          - platform: macos-13
+            rust-target: x86_64-apple-darwin
+            tauri-args: "--target x86_64-apple-darwin"
+            build-sidecars: "bash scripts/build-sidecars.sh"
+            os: macOS
+
+          # ------------------------------------------------------------------
+          # Linux x86_64 (AppImage + deb)
+          # ------------------------------------------------------------------
+          - platform: ubuntu-22.04
+            rust-target: x86_64-unknown-linux-gnu
+            tauri-args: ""
+            build-sidecars: "bash scripts/build-sidecars.sh"
+            os: Linux
+
+          # ------------------------------------------------------------------
+          # Windows x86_64 (NSIS installer)
+          # ------------------------------------------------------------------
+          - platform: windows-latest
+            rust-target: x86_64-pc-windows-msvc
+            tauri-args: ""
+            # Use cargo directly — Windows runners do not have bash in PATH by
+            # default and there are no Swift sidecars to build on Windows.
+            build-sidecars: >-
+              cargo build --release
+              --manifest-path src-tauri/Cargo.toml
+              -p mdopen
+              -p mdopener-mcp
+            os: Windows
+
+    runs-on: ${{ matrix.platform }}
+
+    # Surface the Apple signing secret as an env var so steps can gate on it.
     env:
       HAS_APPLE_SIGNING: ${{ secrets.APPLE_SIGNING_IDENTITY }}
 
     steps:
       - uses: actions/checkout@v4
+
+      # ---- Toolchain setup -------------------------------------------------
 
       - name: Install Bun
         uses: oven-sh/setup-bun@v2
@@ -82,6 +102,8 @@ jobs:
 
       - name: Install Rust (stable)
         uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust-target }}
 
       - name: Cache Cargo registry + build artefacts
         uses: actions/cache@v4
@@ -90,49 +112,64 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             src-tauri/target
-          key: ${{ runner.os }}-cargo-app-${{ hashFiles('src-tauri/Cargo.lock') }}
+          key: ${{ runner.os }}-${{ matrix.rust-target }}-cargo-${{ hashFiles('src-tauri/Cargo.lock') }}
           restore-keys: |
-            ${{ runner.os }}-cargo-app-
+            ${{ runner.os }}-${{ matrix.rust-target }}-cargo-
+
+      # ---- Linux system dependencies (Tauri 2 prerequisites) ---------------
+      # Package list from https://v2.tauri.app/start/prerequisites/
+
+      - name: Install Linux system dependencies
+        if: matrix.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            build-essential \
+            curl \
+            wget \
+            file \
+            libxdo-dev \
+            libssl-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf
+
+      # ---- JS dependencies -------------------------------------------------
 
       - name: Install JS dependencies
         run: bun install --frozen-lockfile
 
-      # Download the pre-built sidecar binaries into target/release/ so Tauri
-      # can bundle them without recompiling.
-      - name: Download sidecar binaries
-        uses: actions/download-artifact@v4
-        with:
-          name: sidecars-macos
-          path: src-tauri/target/release/
+      # ---- Sidecar binaries ------------------------------------------------
+      # macOS/Linux: runs build-sidecars.sh which detects the OS and builds
+      #   accordingly (all 4 on macOS, 2 Rust-only on Linux).
+      # Windows: cargo build directly (no bash; Swift N/A on Windows).
 
+      - name: Build sidecar binaries
+        run: ${{ matrix.build-sidecars }}
+
+      # Mark Rust sidecar binaries executable (macOS/Linux only)
       - name: Mark sidecar binaries executable
+        if: matrix.os != 'Windows'
         run: |
           chmod +x src-tauri/target/release/mdopen
           chmod +x src-tauri/target/release/mdopener-mcp
 
-      # -----------------------------------------------------------------------
-      # Optional: import Apple Developer certificate for code signing.
-      # This step is gated on the APPLE_SIGNING_IDENTITY secret being present.
-      # Without it the app still builds — just unsigned (fine for forks and
-      # CI smoke-tests).
-      # -----------------------------------------------------------------------
+      # ---- Apple code signing (macOS only, gated on secret) ----------------
+
       - name: Import Apple certificate
-        if: ${{ env.HAS_APPLE_SIGNING != '' }}
+        if: matrix.os == 'macOS' && env.HAS_APPLE_SIGNING != ''
         env:
           APPLE_CERTIFICATE:          ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
         run: |
-          # Decode the base64-encoded .p12 certificate and import it into a
-          # temporary keychain so codesign can find it during the build.
           KEYCHAIN_PATH="$RUNNER_TEMP/app-signing.keychain-db"
           KEYCHAIN_PASSWORD="$(openssl rand -hex 16)"
 
-          # Create a fresh keychain
           security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
           security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
 
-          # Write the certificate to disk and import it
           CERT_PATH="$RUNNER_TEMP/certificate.p12"
           echo "$APPLE_CERTIFICATE" | base64 --decode -o "$CERT_PATH"
           security import "$CERT_PATH" \
@@ -141,44 +178,41 @@ jobs:
             -T /usr/bin/codesign \
             -T /usr/bin/productbuild
 
-          # Make the keychain the default so codesign discovers it
           security list-keychains -d user -s "$KEYCHAIN_PATH" login.keychain
           security set-key-partition-list \
             -S apple-tool:,apple: \
             -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
 
-      # -----------------------------------------------------------------------
-      # Build the Tauri app + create the GitHub Release with the DMG.
-      # tauri-action signs via APPLE_SIGNING_IDENTITY when provided, and
-      # notarizes via APPLE_ID / APPLE_PASSWORD / APPLE_TEAM_ID.
-      # When the signing secrets are absent the build still succeeds (unsigned).
-      # -----------------------------------------------------------------------
+      # ---- Tauri build + GitHub Release ------------------------------------
+      # tauri-action auto-detects the platform config overlay.
+      # All matrix legs target the same tagName / releaseName so tauri-action
+      # updates the same GitHub Release draft and appends platform-specific
+      # entries to the updater latest.json on each run.
+
       - name: Build Tauri app & publish release
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN:               ${{ secrets.GITHUB_TOKEN }}
-          # Code signing (omit or leave empty to build unsigned)
+          # Apple signing / notarization (macOS only; no-op when empty)
           APPLE_SIGNING_IDENTITY:     ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          # Notarization (requires an Apple Developer account — $99/yr)
           APPLE_ID:                   ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD:             ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID:              ${{ secrets.APPLE_TEAM_ID }}
-          # Tauri updater private key — see docs/RELEASING.md
-          TAURI_SIGNING_PRIVATE_KEY:  ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          # Tauri updater signing key (cross-platform — required on all legs)
+          TAURI_SIGNING_PRIVATE_KEY:          ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName:       ${{ github.ref_name }}
           releaseName:   "MD Opener ${{ github.ref_name }}"
           releaseBody:   |
             See the [CHANGELOG](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md) for what's new.
-          releaseDraft:  true    # Review the release notes before publishing
+          releaseDraft:  true
           prerelease:    ${{ contains(github.ref_name, '-') }}
-          args:          "--target aarch64-apple-darwin"
+          args:          ${{ matrix.tauri-args }}
 
-      # -----------------------------------------------------------------------
-      # Clean up the temporary keychain (best-effort, even if build failed).
-      # -----------------------------------------------------------------------
+      # ---- Cleanup ---------------------------------------------------------
+
       - name: Clean up keychain
-        if: ${{ always() && env.HAS_APPLE_SIGNING != '' }}
+        if: always() && matrix.os == 'macOS' && env.HAS_APPLE_SIGNING != ''
         run: |
           security delete-keychain "$RUNNER_TEMP/app-signing.keychain-db" || true

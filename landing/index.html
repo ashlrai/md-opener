@@ -6,7 +6,7 @@
     <title>Ashlr MD — Markdown, finally beautiful</title>
     <meta
       name="description"
-      content="An open-source, AI-native Markdown app for macOS. Open any .md and it's instantly beautiful — read, edit, export, and understand it with free, private, on-device AI."
+      content="An open-source, AI-native Markdown app for macOS, Windows, and Linux. Open any .md and it's instantly beautiful — read, edit, export, and understand it with free, private, on-device AI."
     />
     <link
       rel="icon"
@@ -15,7 +15,7 @@
     <meta property="og:title" content="Ashlr MD — Markdown, finally beautiful" />
     <meta
       property="og:description"
-      content="The open-source, AI-native Markdown app for macOS. Instantly beautiful, editable, exportable — with free on-device AI."
+      content="The open-source, AI-native Markdown app for macOS, Windows, and Linux. Instantly beautiful, editable, exportable — with free on-device AI."
     />
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://md.ashlr.ai/" />
@@ -1290,14 +1290,14 @@
         </p>
         <div class="hero-cta">
           <a class="btn btn-primary" href="#download">
-            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M16.4 12.5c0-2.3 1.9-3.4 2-3.5-1.1-1.6-2.8-1.8-3.4-1.8-1.4-.1-2.8.9-3.5.9-.7 0-1.8-.8-3-.8-1.5 0-3 .9-3.8 2.3-1.6 2.8-.4 7 1.2 9.3.8 1.1 1.7 2.4 2.9 2.3 1.2 0 1.6-.7 3-.7s1.8.7 3 .7c1.2 0 2-1.1 2.8-2.2.9-1.3 1.2-2.5 1.3-2.6-.1 0-2.5-1-2.5-3.9ZM14.1 5.4c.6-.8 1.1-1.9.9-3-.9 0-2.1.6-2.8 1.4-.6.7-1.1 1.8-1 2.9 1 .1 2.1-.5 2.9-1.3Z"/></svg>
-            Download for macOS
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v13m0 0-4-4m4 4 4-4M3 21h18" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Download free
           </a>
           <a class="btn btn-ghost" href="https://github.com/ashlrai/ashlr-md">Star on GitHub →</a>
         </div>
         <div class="hero-meta">
           <span><span class="dot"></span> Free &amp; open source (MIT)</span>
-          <span><span class="dot"></span> Local-first</span>
+          <span><span class="dot"></span> macOS · Windows · Linux</span>
           <span><span class="dot"></span> No account, no telemetry</span>
         </div>
 
@@ -1359,11 +1359,11 @@
       <div class="wrap">
         <div class="sec-head reveal">
           <div class="kicker">The problem</div>
-          <h2 class="title">macOS opens your Markdown <em>wrong.</em></h2>
+          <h2 class="title">Your system opens Markdown <em>wrong.</em></h2>
           <p>
             Double-click a <code style="font-family: var(--mono)">.md</code> and
-            you get Preview (a blank page) or TextEdit (a wall of raw syntax).
-            Neither is built for the documents AI agents actually produce.
+            you get Preview (a blank page), TextEdit, or Notepad — raw syntax walls
+            none of them were built for the documents AI agents actually produce.
           </p>
         </div>
         <div class="problem reveal">
@@ -1402,7 +1402,7 @@ mdopen PLAN.md
         <div class="sec-head reveal">
           <div class="kicker">Everything you need</div>
           <h2 class="title">A real app for your <em>.md</em> files.</h2>
-          <p>Open, read, edit, and share Markdown — beautifully, instantly, and without leaving your Mac.</p>
+          <p>Open, read, edit, and share Markdown — beautifully, instantly, on macOS, Windows, and Linux.</p>
         </div>
         <div class="grid">
           <div class="feat reveal">
@@ -1446,19 +1446,19 @@ mdopen PLAN.md
             <div>
               <div class="sec-head reveal" style="margin-bottom: 0">
                 <div class="kicker">Free · private · on-device</div>
-                <h2 class="title">AI that never leaves <em>your Mac.</em></h2>
-                <p>Summarize, explain, rewrite, or translate any document — powered by Apple's on-device foundation models. No API key. No subscription. Nothing uploaded.</p>
+                <h2 class="title">AI that never leaves <em>your device.</em></h2>
+                <p>Summarize, explain, rewrite, or translate any document — locally and free. On macOS 26+ (Apple Silicon): Apple's on-device models, zero setup. On Windows &amp; Linux: Ollama, or bring your own key. Nothing uploaded by default.</p>
               </div>
               <ul class="ai-points reveal">
-                <li><span class="ck">✓</span><div><b>Genuinely free.</b> On-device inference on Apple Silicon — zero cost, zero setup.</div></li>
-                <li><span class="ck">✓</span><div><b>Genuinely private.</b> Your documents never touch a server. The green badge proves it.</div></li>
-                <li><span class="ck">✓</span><div><b>Smart fallback.</b> No Apple Intelligence? It uses local Ollama, or your own key — your choice.</div></li>
+                <li><span class="ck">✓</span><div><b>Genuinely free.</b> Apple on-device models on Mac (zero setup) or Ollama on Windows &amp; Linux — zero cost either way.</div></li>
+                <li><span class="ck">✓</span><div><b>Genuinely private.</b> Your documents never touch a server on any platform. The green badge proves it.</div></li>
+                <li><span class="ck">✓</span><div><b>Tiered fallback.</b> Apple Foundation Models → Ollama → your own cloud key. You always control where inference runs.</div></li>
               </ul>
             </div>
             <div class="ai-mock reveal">
               <div class="amh">
                 <span class="pill"><span class="led"></span> On device</span>
-                <div class="who">AI Assistant<small>Apple Foundation Models</small></div>
+                <div class="who">AI Assistant<small>On-device · free · private</small></div>
               </div>
               <div class="ai-body">
                 <div class="msg u">Summarize this plan in one line</div>
@@ -1531,11 +1531,11 @@ mdopen PLAN.md
         <div class="cta reveal">
           <div class="mark">M</div>
           <h2>Open Markdown.<br />Instantly beautiful.</h2>
-          <p>Free, open source, and local-first. Make Ashlr MD your default <code style="font-family: var(--mono)">.md</code> handler and never dread a Markdown file again.</p>
+          <p>Free, open source, and local-first — on macOS, Windows, and Linux. Make Ashlr MD your default <code style="font-family: var(--mono)">.md</code> handler and never dread a Markdown file again.</p>
           <div class="hero-cta">
             <a class="btn btn-primary" href="https://github.com/ashlrai/ashlr-md/releases">
-              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M16.4 12.5c0-2.3 1.9-3.4 2-3.5-1.1-1.6-2.8-1.8-3.4-1.8-1.4-.1-2.8.9-3.5.9-.7 0-1.8-.8-3-.8-1.5 0-3 .9-3.8 2.3-1.6 2.8-.4 7 1.2 9.3.8 1.1 1.7 2.4 2.9 2.3 1.2 0 1.6-.7 3-.7s1.8.7 3 .7c1.2 0 2-1.1 2.8-2.2.9-1.3 1.2-2.5 1.3-2.6-.1 0-2.5-1-2.5-3.9ZM14.1 5.4c.6-.8 1.1-1.9.9-3-.9 0-2.1.6-2.8 1.4-.6.7-1.1 1.8-1 2.9 1 .1 2.1-.5 2.9-1.3Z"/></svg>
-              Download for macOS
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v13m0 0-4-4m4 4 4-4M3 21h18" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              Download — macOS · Windows · Linux
             </a>
             <a class="btn btn-ghost" href="https://github.com/ashlrai/ashlr-md">View source →</a>
           </div>

@@ -1,18 +1,25 @@
 //! `mdopen` — open a Markdown file in Ashlr MD from any terminal or agent.
 //!
 //! Usage:
-//!   mdopen <file.md>          open a file
+//!   mdopen <file.md>          open a file (read mode)
 //!   mdopen --edit <file.md>   open in edit mode
 //!   mdopen -                  read from stdin, write to a temp file, then open
 //!   mdopen --help             print this help text
 //!
 //! The tool resolves the path to an absolute path, percent-encodes it, and
-//! invokes `open "mdopener://open?path=…"` — which either brings the running
-//! Ashlr MD window to the front or cold-starts the app.
+//! invokes the OS-appropriate command to open the `mdopener://open?path=…` URL,
+//! which either brings the running Ashlr MD window to the front or cold-starts
+//! the app.
+//!
+//! OS-specific URL launcher:
+//!   macOS   — `open <url>`
+//!   Linux   — `xdg-open <url>`
+//!   Windows — `cmd /C start "" <url>`
 //!
 //! This binary is intentionally tiny: std only + urlencoding.  It is bundled
-//! as a Tauri sidecar and also installed to /usr/local/bin by the in-app
-//! "Install CLI tool" command.
+//! as a Tauri sidecar and also installed to /usr/local/bin (macOS/Linux) or
+//! %LOCALAPPDATA%\Programs\mdopen (Windows) by the in-app "Install CLI tool"
+//! command.
 
 use std::path::PathBuf;
 use std::process;
@@ -93,7 +100,7 @@ fn read_stdin_to_temp() -> PathBuf {
     tmp_path
 }
 
-/// Build the `mdopener://open?…` URL and hand it off to the OS.
+/// Build the `mdopener://open?…` URL and hand it off to the OS launcher.
 fn open_in_app(abs_path: &str, mode: Option<&str>) {
     let encoded = urlencoding::encode(abs_path);
     let mut url = format!("mdopener://open?path={encoded}");
@@ -101,18 +108,40 @@ fn open_in_app(abs_path: &str, mode: Option<&str>) {
         url.push_str(&format!("&mode={m}"));
     }
 
-    // `open` is the macOS command that routes custom URL schemes.
-    let status = process::Command::new("open")
-        .arg(&url)
+    launch_url(&url);
+}
+
+/// Invoke the platform-appropriate command to open a URL / custom scheme.
+///
+/// - macOS   → `open <url>`          (built-in, routes registered URL schemes)
+/// - Linux   → `xdg-open <url>`      (xdg-utils; handles registered MIME/scheme)
+/// - Windows → `cmd /C start "" <url>` (the empty title "" is required when the
+///             first argument begins with a quote or special character)
+fn launch_url(url: &str) {
+    #[cfg(target_os = "macos")]
+    let (prog, args): (&str, &[&str]) = ("open", &[url]);
+
+    #[cfg(target_os = "linux")]
+    let (prog, args): (&str, &[&str]) = ("xdg-open", &[url]);
+
+    // On Windows `start` is a cmd built-in, not a standalone executable, so we
+    // must shell out through cmd.  The empty `""` is the window title — required
+    // when the URL string itself starts with `"` or contains spaces after percent-
+    // encoding (start interprets the first quoted arg as the window title).
+    #[cfg(target_os = "windows")]
+    let (prog, args): (&str, &[&str]) = ("cmd", &["/C", "start", "", url]);
+
+    let status = process::Command::new(prog)
+        .args(args)
         .status()
         .unwrap_or_else(|e| {
-            eprintln!("mdopen: failed to run `open`: {e}");
+            eprintln!("mdopen: failed to run `{prog}`: {e}");
             process::exit(1);
         });
 
     if !status.success() {
         eprintln!(
-            "mdopen: `open` exited with status {}",
+            "mdopen: `{prog}` exited with status {}",
             status.code().unwrap_or(-1)
         );
         process::exit(1);
@@ -137,8 +166,8 @@ EXAMPLES:
     mdopen --edit notes/todo.md
     echo '# Hello' | mdopen -
 
-The tool resolves the file path to absolute, then calls:
-    open \"mdopener://open?path=<encoded-path>\"
+The tool resolves the file path to absolute, then opens:
+    mdopener://open?path=<encoded-path>
 which forwards to the running Ashlr MD app (or launches it).
 "
     );

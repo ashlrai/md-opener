@@ -6,10 +6,10 @@
 
 When Ashlr MD is finished, this is true:
 
-1. **Instant.** Double-click any `.md` and it's on screen in well under a second, rendered beautifully. It is the obvious default `.md` handler on macOS.
+1. **Instant.** Double-click any `.md` and it's on screen in well under a second, rendered beautifully. It is the obvious default `.md` handler on every platform.
 2. **Beautiful by default.** Agent output (`PLAN.md`, `README.md`, research dumps) looks like a polished document with zero configuration — gorgeous themes, perfect code, diagrams, math, tables.
 3. **Effortless to edit.** Non-technical people edit in a Typora-style WYSIWYG and never see raw syntax. Power users get a lossless source mode. Saving is instant and safe.
-4. **Free, private AI built in.** Summarize / explain / rewrite / translate runs **locally and free** by default (Apple on-device → Ollama), with cloud as an optional upgrade. Nothing leaves the device unless the user explicitly opts in.
+4. **Free, private AI built in.** Summarize / explain / rewrite / translate runs **locally and free** by default — Apple on-device models on macOS 26+ (Apple Silicon), Ollama on Windows & Linux — with cloud as an optional upgrade. Nothing leaves the device unless the user explicitly opts in.
 5. **Agent-native.** Claude Code / Codex can open a file (`mdopen file.md` / `mdopener://…`) and *drive* the app over MCP (open, read, edit, export). The app is a first-class citizen in an agentic workflow.
 6. **Shareable in one click.** Export to PDF / DOCX / HTML that looks great, with no Pandoc, no Terminal, no account.
 7. **Trustworthy & open.** MIT, local-first, no telemetry by default, no GPL bundled. A great open-source project the world can rely on; a premium hosted-AI tier funds it.
@@ -20,7 +20,7 @@ The growing population of people — many non-technical — who use AI coding ag
 
 ## Experience pillars (the feel)
 
-- **Calm & native.** Feels like part of macOS. No Electron bloat, no jank, no chrome you don't need.
+- **Calm & native.** Feels right on every OS — macOS, Windows, and Linux. No Electron bloat, no jank, no chrome you don't need.
 - **Zero-config.** It's right the first time. Defaults are excellent.
 - **Honest about data.** A glanceable privacy badge; local-first is the default, not a setting you must find.
 - **Respects the file.** Editing never silently corrupts exotic Markdown; lossless source mode is always one click away.
@@ -64,7 +64,7 @@ Each increment runs the same loop. We do not move on until the loop closes.
 | M3 | Export | One-click PDF / DOCX / HTML that looks great, fully offline, no Pandoc. |
 | M4 | Local-first AI | Tiered provider (Apple on-device → Ollama → BYO key → hosted); selection actions + chat; privacy badge; free by default. |
 | M5 | Agent hand-off + MCP | `mdopen` CLI + `mdopener://` scheme + MCP server agents can drive; one-line setup. |
-| M6 | Smart rendering + distribution | Interactive checkboxes, code Copy/Run, callouts, plan/diff detection; signed/notarized DMG + Homebrew cask + auto-update. |
+| M6 | Smart rendering + distribution | Interactive checkboxes, code Copy/Run, callouts, plan/diff detection; macOS notarized DMG + Homebrew cask; Windows MSI/NSIS; Linux .deb/.AppImage; auto-update. |
 
 ## Non-goals (so we stay sharp)
 

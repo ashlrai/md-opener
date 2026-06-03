@@ -6,15 +6,15 @@
 
 ### Markdown, finally beautiful.
 
-**An open-source, AI-native Markdown app for macOS.** Double-click any `.md` and
+**An open-source, AI-native Markdown app for macOS, Windows, and Linux.** Double-click any `.md` and
 it's instantly beautiful — read it, edit it, export it, and understand it with
 free, private, **on-device AI** built in.
 
-*Think Preview.app, but Markdown-aware, editable, and AI-native.*
+*Think Preview.app, but Markdown-aware, editable, and AI-native — and cross-platform.*
 
 [![CI](https://github.com/ashlrai/ashlr-md/actions/workflows/ci.yml/badge.svg)](https://github.com/ashlrai/ashlr-md/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-0969da.svg)](./LICENSE)
-[![Platform: macOS](https://img.shields.io/badge/platform-macOS-1a1a17.svg)](#)
+[![Platform: macOS · Windows · Linux](https://img.shields.io/badge/platform-macOS%20%C2%B7%20Windows%20%C2%B7%20Linux-1a1a17.svg)](#)
 [![Built with Tauri](https://img.shields.io/badge/built%20with-Tauri%202-24c8db.svg)](https://tauri.app)
 
 [**Website**](https://md.ashlr.ai) ·
@@ -32,9 +32,9 @@ free, private, **on-device AI** built in.
 ## Why
 
 Your AI agents write Markdown all day — `README.md`, `PLAN.md`, research dumps.
-On macOS those open in **Preview** (a blank page) or **TextEdit** (raw syntax).
-No app owns the simple job of making them *look right* instantly, especially for
-non-technical people. Ashlr MD does exactly that, and nothing you don't need.
+On most systems those open as a wall of raw syntax (TextEdit, Notepad) or a blank
+page (Preview). No app owns the simple job of making them *look right* instantly,
+especially for non-technical people. Ashlr MD does exactly that, on every platform.
 
 ## Features
 
@@ -43,9 +43,10 @@ non-technical people. Ashlr MD does exactly that, and nothing you don't need.
 - **Edit without the syntax** — Typora-style WYSIWYG (Milkdown) + a lossless
   source mode (CodeMirror). Atomic save, external-change aware.
 - **Export anywhere** — one-click **PDF / DOCX / HTML**, fully offline, no Pandoc.
-- **Free, private, on-device AI** — summarize / explain / rewrite / translate via
-  **Apple Foundation Models** (macOS 26+), falling back to local **Ollama** or
-  your own key. Nothing leaves your device unless you opt in.
+- **Free, private, on-device AI** — summarize / explain / rewrite / translate.
+  On **macOS 26+ (Apple Silicon)**: zero-install via **Apple Foundation Models**.
+  On **Windows & Linux** (and as a fallback on Mac): local **Ollama** or your own
+  cloud key. Nothing leaves your device unless you opt in.
 - **Agent-native** — `mdopen file.md`, the `mdopener://` URL scheme, and an **MCP
   server** so Claude Code / Codex can open, read, edit, and export the live doc.
 - **Obsidian integration** — the [Open in Ashlr MD](./integrations/obsidian/)
@@ -54,8 +55,19 @@ non-technical people. Ashlr MD does exactly that, and nothing you don't need.
 - **Smart agent output** — callouts, interactive checkboxes that save back to the
   file, and automatic plan / diff / multi-file detection.
 - **Three themes** — Paper, Sepia, Midnight — switch live.
-- **Native & instant** — built on [Tauri 2](https://tauri.app); a tiny binary, no
-  Electron bloat. MIT, local-first, no telemetry.
+- **Native & instant** — built on [Tauri 2](https://tauri.app); a tiny native binary
+  on every OS, no Electron bloat. MIT, local-first, no telemetry.
+
+
+## Platform support
+
+| Capability | macOS | Windows | Linux |
+|---|---|---|---|
+| Core (render · edit · export · themes) | ✅ | ✅ | ✅ |
+| Default `.md` handler | ✅ one-click (Launch Services) | ✅ registers association (opens Settings to confirm) | ✅ via `xdg-mime` |
+| Free local AI (zero-install) | ✅ Apple Foundation Models (macOS 26+, Apple Silicon) | Ollama (install separately) | Ollama (install separately) |
+| `mdopen` CLI & `mdopener://` deep link | ✅ | ✅ | ✅ |
+| MCP server | ✅ | ✅ | ✅ |
 
 ## Use it with an AI agent
 
@@ -74,6 +86,20 @@ Open **Preferences → AI agents (MCP)** and click **Connect to Claude Code** or
 **Connect to Cursor** — no terminal required. For Codex, copy the command from the
 same panel. Full guide + config snippets: [**docs/AGENTS.md**](./docs/AGENTS.md).
 
+## Download & install
+
+Downloads are on the [GitHub Releases page](https://github.com/ashlrai/ashlr-md/releases).
+
+| Platform | Artifact |
+|---|---|
+| macOS | `.dmg` (drag to `/Applications`); Homebrew cask coming soon |
+| Windows | `.msi` / NSIS `.exe` installer |
+| Linux | `.deb` (Debian/Ubuntu) · `.AppImage` (universal, unsigned) |
+
+> **Note:** Windows code-signing is not yet set up — you may see a SmartScreen
+> warning; click "More info → Run anyway". macOS builds are notarized. Linux
+> AppImages ship unsigned.
+
 There's also a one-shot installer that builds from source, installs the `mdopen`
 CLI, and wires up Claude Code:
 
@@ -83,8 +109,11 @@ bash scripts/install.sh
 
 ## Develop
 
-Prerequisites: [Rust](https://rustup.rs), [Bun](https://bun.sh), and Xcode
-Command Line Tools (macOS).
+Prerequisites: [Rust](https://rustup.rs) and [Bun](https://bun.sh).
+On macOS, also install Xcode Command Line Tools (`xcode-select --install`).
+On Windows, install the [MSVC build tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/).
+On Linux, install `build-essential` (Debian/Ubuntu) or equivalent, plus the
+[Tauri Linux dependencies](https://tauri.app/start/prerequisites/#linux).
 
 ```bash
 bun install

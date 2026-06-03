@@ -58,7 +58,10 @@ def fibonacci(n: int) -> int:
 ```
 
 ```bash
+# macOS (Homebrew cask — coming soon)
 brew install --cask md-opener
+
+# All platforms: download from GitHub Releases
 mdopen ./README.md
 ```
 

@@ -1,26 +1,39 @@
 //! Default Markdown app handler — check and set Ashlr MD as the system-wide
 //! default application for `.md` (and related Markdown) files.
 //!
-//! # Approach: Swift helper binary (`mdopener-setdefault`)
+//! # Per-OS strategy
 //!
-//! We use a Swift helper binary rather than the `objc2` crates because:
-//!   - The required API (`NSWorkspace.setDefaultApplication(at:toOpenContentType:)`)
-//!     lives in AppKit and takes an `async completionHandler:` closure that
-//!     drives through a CFRunLoop — mapping that to Rust with objc2 would require
-//!     careful raw-pointer bridging and runtime loop management that is fragile
-//!     across SDK generations.
-//!   - This project already has a proven Swift-sidecar pattern (`mdopener-afm`)
-//!     so the toolchain, build script shape, and binary-discovery logic are
-//!     well-established. The helper is tiny (< 100 LOC) and has zero external deps.
-//!   - The helper is short-lived (one invocation per check/set), so there is no
-//!     IPC complexity.
+//! ## macOS
+//! Uses the `mdopener-setdefault` Swift helper binary which calls
+//! `NSWorkspace.setDefaultApplication(at:toOpenContentType:completionHandler:)`.
+//! See the binary-protocol section below for the JSON-line wire format.
 //!
-//! # Binary protocol
+//! ## Linux
+//! Uses `xdg-mime` (from `xdg-utils`) to query and set the default handler for
+//! `text/markdown` (and the unofficial `text/x-markdown` alias).  No root
+//! privileges are required — `xdg-mime` writes into `~/.config/mimeapps.list`.
 //!
-//! The helper accepts two commands, each printing one JSON line to stdout and
-//! exiting 0 on success, 1 on hard failure:
+//! ASSUMPTION: the Tauri-generated `.desktop` file is named
+//! `app.mdopener.desktop.desktop` (Tauri 2 appends `.desktop` to the bundle
+//! identifier `app.mdopener.desktop`).  **Integrator: verify this against the
+//! actual file in `/usr/share/applications/` after `tauri build` on Linux and
+//! update `LINUX_DESKTOP_FILE` if it differs.**
 //!
-//! ```
+//! ## Windows
+//! Win10+ blocks fully-programmatic default-app changes (the shell's UserChoice
+//! key is hash-protected).  We take a best-effort two-step approach:
+//!   1. Register a ProgID (`AshlrMD.MarkdownFile`) and a `.md` association
+//!      under `HKCU\Software\Classes` so the app appears as a candidate.
+//!   2. Open the "Default apps" Settings page (`ms-settings:defaultapps`) so
+//!      the user can confirm the choice with a single click.
+//!
+//! `is_default_md_handler` reads
+//!   `HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\FileExts\.md\UserChoice`
+//! → `ProgId` and compares it against `WINDOWS_PROG_ID`.
+//!
+//! # macOS binary protocol
+//!
+//! ```text
 //! mdopener-setdefault check <file://…bundle.app>
 //!   → {"isDefault":true|false}
 //!
@@ -32,28 +45,56 @@
 //!
 //! # Dev-mode note
 //!
-//! When running under `cargo tauri dev` the app is *not* bundled — it runs from
-//! `target/debug/md-opener` with no `.app` wrapper.  In that case
-//! `bundle_url()` returns an error and both `is_default_md_handler` returns
-//! `false` and `set_default_md_handler` returns a friendly error string.
-//! This is intentional and expected.
+//! When running under `cargo tauri dev` the app is *not* bundled — on macOS
+//! `bundle_url()` returns `Err`, so `is_default_md_handler` returns `false`
+//! and `set_default_md_handler` returns a friendly error.  This is intentional.
 
-use std::path::PathBuf;
-use std::process::Command;
+// ---------------------------------------------------------------------------
+// Imports — platform-gated to avoid unused-import warnings on other targets.
+// ---------------------------------------------------------------------------
 
 use tauri::{AppHandle, Manager};
 
+#[cfg(target_os = "linux")]
+use std::process::Command;
+
+#[cfg(target_os = "macos")]
+use std::path::PathBuf;
+#[cfg(target_os = "macos")]
+use std::process::Command;
+
 // ---------------------------------------------------------------------------
-// Binary discovery
+// OS-specific constants
 // ---------------------------------------------------------------------------
 
-/// Find the `mdopener-setdefault` binary.
+/// Linux: the `.desktop` filename Tauri generates for this app.
+///
+/// Tauri 2 names the desktop file `<identifier>.desktop` where the identifier
+/// comes from `tauri.conf.json` → `identifier`.  With identifier
+/// `app.mdopener.desktop`, Tauri appends another `.desktop` suffix, producing
+/// `app.mdopener.desktop.desktop`.
+///
+/// **Integrator: verify against `/usr/share/applications/` after `tauri build`
+/// on Linux and update this constant if the actual name differs.**
+#[cfg(target_os = "linux")]
+const LINUX_DESKTOP_FILE: &str = "app.mdopener.desktop.desktop";
+
+/// Windows: the ProgID registered under `HKCU\Software\Classes`.
+#[cfg(target_os = "windows")]
+const WINDOWS_PROG_ID: &str = "AshlrMD.MarkdownFile";
+
+// ---------------------------------------------------------------------------
+// macOS — Binary discovery + bundle URL
+// ---------------------------------------------------------------------------
+
+/// Find the `mdopener-setdefault` binary.  macOS only.
 ///
 /// Search order:
 ///   1. Tauri resource directory (production `.app` bundle).
-///   2. `target/release/` relative to the running binary (dev: after running
-///      `build.sh` inside `bins/mdopener-setdefault/`).
+///   2. `target/release/` relative to the running binary (dev, after
+///      running `build.sh` inside `bins/mdopener-setdefault/`).
 ///   3. Same directory as the running binary (alternative dev layout).
+#[cfg(target_os = "macos")]
 fn find_helper_binary(app: &AppHandle) -> Option<PathBuf> {
     const BIN: &str = "mdopener-setdefault";
 
@@ -68,7 +109,7 @@ fn find_helper_binary(app: &AppHandle) -> Option<PathBuf> {
     // 2. target/release/ (after running build.sh in dev).
     if let Ok(exe) = std::env::current_exe() {
         if let Some(target_dir) = exe.parent().and_then(|p| p.parent()) {
-            // exe is at target/debug/md-opener → sibling is target/release/
+            // exe is at target/debug/md-opener → parent of parent is target/
             let c = target_dir.join("release").join(BIN);
             if c.exists() {
                 return Some(c);
@@ -86,18 +127,14 @@ fn find_helper_binary(app: &AppHandle) -> Option<PathBuf> {
     None
 }
 
-// ---------------------------------------------------------------------------
-// Bundle URL resolution
-// ---------------------------------------------------------------------------
-
-/// Return the `file://` URL string for the running app's `.app` bundle.
+/// Return the `file://` URL for the running `.app` bundle.  macOS only.
 ///
-/// In a production bundle the executable lives at
-/// `Ashlr MD.app/Contents/MacOS/md-opener`, so three `.parent()` calls walk up
-/// to the `.app` directory.
+/// In a production bundle the exe lives at
+/// `Ashlr MD.app/Contents/MacOS/md-opener`, so three `.parent()` calls walk
+/// up to the `.app` directory.
 ///
-/// In `tauri dev` mode the executable is `target/debug/md-opener` — there is no
-/// `.app` wrapper — so this function returns an `Err`.
+/// Returns `Err` when running unbundled under `cargo tauri dev`.
+#[cfg(target_os = "macos")]
 fn bundle_url() -> Result<String, String> {
     let exe = std::env::current_exe()
         .map_err(|e| format!("Could not determine executable path: {e}"))?;
@@ -127,23 +164,64 @@ fn bundle_url() -> Result<String, String> {
 }
 
 // ---------------------------------------------------------------------------
-// Tauri commands
+// Windows — registry helpers  (compiled only on Windows)
 // ---------------------------------------------------------------------------
 
-/// Returns `true` when Ashlr MD is already the default app for `.md` files.
+#[cfg(target_os = "windows")]
+mod win_reg_helpers {
+    //! Thin wrappers around `winreg` for reading/writing HKCU registry keys.
+
+    use winreg::enums::{HKEY_CURRENT_USER, KEY_READ};
+    use winreg::RegKey;
+
+    /// Open (or create) a key under HKCU with write access and return it.
+    pub fn open_or_create(path: &str) -> Result<RegKey, String> {
+        let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+        let (key, _disp) = hkcu
+            .create_subkey(path)
+            .map_err(|e| format!("registry create_subkey({path}): {e}"))?;
+        Ok(key)
+    }
+
+    /// Read a `REG_SZ` value from a HKCU key path.
+    /// Returns `None` when the key or value does not exist (not an error).
+    pub fn read_sz(key_path: &str, value_name: &str) -> Option<String> {
+        let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+        let key = hkcu.open_subkey_with_flags(key_path, KEY_READ).ok()?;
+        key.get_value::<String, _>(value_name).ok()
+    }
+
+    /// Write a `REG_SZ` value; creates the key if it does not exist.
+    pub fn write_sz(key_path: &str, value_name: &str, data: &str) -> Result<(), String> {
+        let key = open_or_create(key_path)?;
+        key.set_value(value_name, &data.to_string())
+            .map_err(|e| format!("registry set_value({key_path}\\{value_name}): {e}"))
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Tauri command — is_default_md_handler
+// ---------------------------------------------------------------------------
+
+/// Returns `true` when Ashlr MD is already the default handler for `.md` files.
 ///
-/// Returns `false` (not an error) in all failure cases so the frontend can
-/// always render a meaningful UI regardless of environment.
+/// Never returns `Err` — in all failure cases it returns `false` so the
+/// frontend can always render a meaningful UI without error handling.
 #[tauri::command]
 pub fn is_default_md_handler(app: AppHandle) -> bool {
+    is_default_impl(app)
+}
+
+// --- macOS implementation ---
+
+#[cfg(target_os = "macos")]
+fn is_default_impl(app: AppHandle) -> bool {
     let Ok(url) = bundle_url() else {
-        // Not bundled (dev mode) — report not-default silently.
-        return false;
+        return false; // dev mode — not bundled
     };
 
     let Some(bin) = find_helper_binary(&app) else {
-        // Helper not built yet — treat as not-default; no panic.
-        return false;
+        return false; // helper not built yet
     };
 
     let output = match Command::new(&bin).args(["check", &url]).output() {
@@ -164,22 +242,68 @@ pub fn is_default_md_handler(app: AppHandle) -> bool {
     false
 }
 
+// --- Linux implementation ---
+
+#[cfg(target_os = "linux")]
+fn is_default_impl(_app: AppHandle) -> bool {
+    // `xdg-mime query default text/markdown` prints the .desktop filename
+    // (or an empty string when no handler is registered).
+    match Command::new("xdg-mime")
+        .args(["query", "default", "text/markdown"])
+        .output()
+    {
+        Ok(out) => {
+            let current = String::from_utf8_lossy(&out.stdout);
+            current.trim().eq_ignore_ascii_case(LINUX_DESKTOP_FILE)
+        }
+        Err(_) => false, // xdg-utils not installed — treat as not-default
+    }
+}
+
+// --- Windows implementation ---
+
+#[cfg(target_os = "windows")]
+fn is_default_impl(_app: AppHandle) -> bool {
+    // Win10+ stores the user's explicit choice in:
+    //   HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\FileExts\.md\UserChoice
+    //   value: ProgId  (REG_SZ)
+    //
+    // This key only exists after the user has made a manual selection via the
+    // Settings UI; if absent, the system default applies (= not us).
+    let prog_id = win_reg_helpers::read_sz(
+        r"Software\Microsoft\Windows\CurrentVersion\Explorer\FileExts\.md\UserChoice",
+        "ProgId",
+    );
+
+    match prog_id {
+        Some(id) => id.eq_ignore_ascii_case(WINDOWS_PROG_ID),
+        None => false, // no user choice recorded yet
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Tauri command — set_default_md_handler
+// ---------------------------------------------------------------------------
+
 /// Registers Ashlr MD as the default application for Markdown files
 /// (`.md`, `.markdown`, `.mdown`, `.mkd`, `.mdx`).
 ///
-/// Uses the `mdopener-setdefault` Swift helper which calls
-/// `NSWorkspace.setDefaultApplication(at:toOpenContentType:completionHandler:)`.
+/// See module-level doc for the per-OS strategy.
 ///
 /// # Errors
 ///
-/// Returns a human-readable `Err` string when:
-///   - The app is running unbundled (`tauri dev`).
-///   - The helper binary hasn't been built yet.
-///   - The helper exits with a non-zero code.
-///   - macOS 12 is not available (the helper degrades gracefully in that case
-///     and we surface the error message from its JSON output).
+/// Returns a human-readable `Err` string when the operation fails hard.
+/// On Windows the call always returns `Ok` because the registry write is
+/// best-effort and the Settings page is opened for the user to confirm.
 #[tauri::command]
 pub fn set_default_md_handler(app: AppHandle) -> Result<(), String> {
+    set_default_impl(app)
+}
+
+// --- macOS implementation ---
+
+#[cfg(target_os = "macos")]
+fn set_default_impl(app: AppHandle) -> Result<(), String> {
     let url = bundle_url()?;
 
     let bin = find_helper_binary(&app).ok_or_else(|| {
@@ -221,21 +345,125 @@ pub fn set_default_md_handler(app: AppHandle) -> Result<(), String> {
     Ok(())
 }
 
-/// Opens the most useful system UI for manually setting a default app.
+// --- Linux implementation ---
+
+#[cfg(target_os = "linux")]
+fn set_default_impl(_app: AppHandle) -> Result<(), String> {
+    // Register our .desktop file for both the canonical MIME type and the
+    // common unofficial alias.  `xdg-mime` writes to ~/.config/mimeapps.list
+    // — no root privileges required.
+    for mime in &["text/markdown", "text/x-markdown"] {
+        let status = Command::new("xdg-mime")
+            .args(["default", LINUX_DESKTOP_FILE, mime])
+            .status()
+            .map_err(|e| {
+                format!(
+                    "Failed to run `xdg-mime default {LINUX_DESKTOP_FILE} {mime}`: {e}. \
+                     Ensure `xdg-utils` is installed \
+                     (apt install xdg-utils / dnf install xdg-utils)."
+                )
+            })?;
+
+        if !status.success() {
+            return Err(format!(
+                "`xdg-mime default {LINUX_DESKTOP_FILE} {mime}` exited with status {}.",
+                status.code().unwrap_or(-1)
+            ));
+        }
+    }
+
+    Ok(())
+}
+
+// --- Windows implementation ---
+
+#[cfg(target_os = "windows")]
+fn set_default_impl(app: AppHandle) -> Result<(), String> {
+    // Step 1 — Register our ProgID and the .md association under
+    // HKCU\Software\Classes.  Best-effort: Win10+ UserChoice will still
+    // override us in the shell, but this makes the app appear as a candidate
+    // in "Choose another app" dialogs and for programmatic file-open calls.
+    register_windows_prog_id()?;
+
+    // Step 2 — Open the "Default apps" Settings page so the user can confirm
+    // with a single click.  Done after the registry write so we appear in the list.
+    open_windows_default_apps_page(&app);
+
+    Ok(())
+}
+
+/// Write the ProgID entries and `.md` → ProgID pointer under `HKCU\Software\Classes`.
+#[cfg(target_os = "windows")]
+fn register_windows_prog_id() -> Result<(), String> {
+    let exe = std::env::current_exe()
+        .map_err(|e| format!("Could not determine executable path: {e}"))?;
+    let exe_str = exe
+        .to_str()
+        .ok_or("Executable path contains non-UTF-8 characters")?;
+
+    // HKCU\Software\Classes\AshlrMD.MarkdownFile  (default) = "Ashlr MD Markdown File"
+    win_reg_helpers::write_sz(
+        &format!(r"Software\Classes\{WINDOWS_PROG_ID}"),
+        "",
+        "Ashlr MD Markdown File",
+    )?;
+
+    // Default icon: first icon resource in the exe.
+    win_reg_helpers::write_sz(
+        &format!(r"Software\Classes\{WINDOWS_PROG_ID}\DefaultIcon"),
+        "",
+        &format!("{exe_str},0"),
+    )?;
+
+    // Open verb — routes through the deep-link scheme so the running instance
+    // receives the file path rather than spawning a second process.
+    // %1 is substituted by the shell with the target file path.
+    win_reg_helpers::write_sz(
+        &format!(r"Software\Classes\{WINDOWS_PROG_ID}\shell\open\command"),
+        "",
+        &format!(r#"cmd /C start "" "mdopener://open?path=%1""#),
+    )?;
+
+    // Point .md at our ProgID.  The shell prefers UserChoice when present, but
+    // this acts as a fallback and populates the "Choose another app" list.
+    win_reg_helpers::write_sz(r"Software\Classes\.md", "", WINDOWS_PROG_ID)?;
+
+    Ok(())
+}
+
+/// Open `ms-settings:defaultapps` (Windows 10+ Settings deep-link).
+/// Best-effort — logs to stderr on failure but never panics or propagates Err.
+#[cfg(target_os = "windows")]
+fn open_windows_default_apps_page(app: &AppHandle) {
+    use tauri_plugin_opener::OpenerExt;
+    if let Err(e) = app
+        .opener()
+        .open_url("ms-settings:defaultapps", None::<&str>)
+    {
+        eprintln!("[default_handler] Could not open ms-settings:defaultapps: {e}");
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Tauri command — open_default_apps_help
+// ---------------------------------------------------------------------------
+
+/// Opens the most useful system UI for manually confirming a default-app choice.
 ///
-/// Falls back gracefully when the Tauri opener fails.  This command is
-/// intentionally infallible from the frontend's perspective.
+/// Intentionally infallible from the frontend's perspective — on failure it
+/// returns a human-readable instruction string as `Err` so the UI can surface
+/// it as a help message.
 #[tauri::command]
 pub fn open_default_apps_help(app: AppHandle) -> Result<(), String> {
-    // On macOS the canonical UI is Finder "Get Info" on any .md file, or the
-    // "Open With" sheet.  We open a System Settings deep-link that shows the
-    // default app preferences; this works on macOS 13+.
-    //
-    // We try two URLs in order: the modern System Settings deep-link, then
-    // a generic Finder fallback.
-    let deep_link = "x-apple.systempreferences:com.apple.preference.general";
+    open_default_apps_help_impl(app)
+}
 
-    // Use Tauri's opener plugin to open the URL.
+// --- macOS implementation ---
+
+#[cfg(target_os = "macos")]
+fn open_default_apps_help_impl(app: AppHandle) -> Result<(), String> {
+    // macOS 13+ System Settings deep-link.
+    let deep_link = "x-apple.systempreferences:com.apple.preference.general";
     use tauri_plugin_opener::OpenerExt;
     app.opener()
         .open_url(deep_link, None::<&str>)
@@ -244,6 +472,39 @@ pub fn open_default_apps_help(app: AppHandle) -> Result<(), String> {
                 "Could not open System Settings ({e}). \
                  To set Ashlr MD as default: right-click any .md file in Finder → \
                  Get Info → Open With → select Ashlr MD → Change All."
+            )
+        })
+}
+
+// --- Linux implementation ---
+
+#[cfg(target_os = "linux")]
+fn open_default_apps_help_impl(_app: AppHandle) -> Result<(), String> {
+    // There is no single universal "Default apps" panel on Linux.  The
+    // xdg-mime commands issued by set_default_md_handler are the canonical
+    // method.  Return an instructional message for the UI to display.
+    Err(format!(
+        "To set Ashlr MD as the default Markdown viewer on Linux, run:\n\
+         \n  xdg-mime default {LINUX_DESKTOP_FILE} text/markdown\
+         \n  xdg-mime default {LINUX_DESKTOP_FILE} text/x-markdown\
+         \n\nOr use your desktop environment's \"Default Applications\" panel \
+         (GNOME Settings → Default Applications, \
+         KDE System Settings → Applications → File Associations)."
+    ))
+}
+
+// --- Windows implementation ---
+
+#[cfg(target_os = "windows")]
+fn open_default_apps_help_impl(app: AppHandle) -> Result<(), String> {
+    use tauri_plugin_opener::OpenerExt;
+    app.opener()
+        .open_url("ms-settings:defaultapps", None::<&str>)
+        .map_err(|e| {
+            format!(
+                "Could not open Default apps settings ({e}). \
+                 To set Ashlr MD manually: Settings → Apps → Default apps → \
+                 search for \".md\" → choose Ashlr MD."
             )
         })
 }

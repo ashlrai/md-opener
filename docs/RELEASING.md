@@ -212,7 +212,7 @@ export async function checkForUpdates() {
 
 ---
 
-## 5. Homebrew Cask
+## 5. Homebrew Cask (macOS only)
 
 A cask template is at `docs/homebrew/md-opener.rb`.
 
@@ -230,7 +230,55 @@ curl -L https://github.com/OWNER/md-opener/releases/download/vX.Y.Z/MD.Opener_X.
 
 ---
 
-## 6. Checklist for Each Release
+
+---
+
+## 6. Windows Release (NSIS / MSI)
+
+The GitHub Actions workflow produces two Windows artifacts:
+- `Ashlr.MD_X.Y.Z_x64-setup.exe` — NSIS installer (recommended)
+- `Ashlr.MD_X.Y.Z_x64_en-US.msi` — MSI package
+
+### Code signing (optional)
+Windows code signing requires an EV or OV certificate. Without it, users see a
+Windows Defender SmartScreen warning. To dismiss: "More info → Run anyway".
+To sign, add these secrets to your GitHub repo:
+
+| Secret | Description |
+|--------|-------------|
+| `WINDOWS_CERTIFICATE` | Base64-encoded `.pfx` code-signing certificate |
+| `WINDOWS_CERTIFICATE_PASSWORD` | Password for the `.pfx` file |
+
+### Release checklist additions (Windows)
+- [ ] Verify `.exe` and `.msi` open and install correctly on a Windows machine
+- [ ] Note SmartScreen behaviour in release notes until signing is set up
+
+---
+
+## 7. Linux Release (.deb / .AppImage)
+
+The workflow produces:
+- `ashlr-md_X.Y.Z_amd64.deb` — Debian/Ubuntu package
+- `Ashlr.MD_X.Y.Z_amd64.AppImage` — portable, runs on most Linux distros
+
+Both ship **unsigned** (no Linux code-signing infrastructure is set up).
+
+### Install instructions for release notes
+```bash
+# .deb
+sudo dpkg -i ashlr-md_X.Y.Z_amd64.deb
+
+# AppImage
+chmod +x Ashlr.MD_X.Y.Z_amd64.AppImage
+./Ashlr.MD_X.Y.Z_amd64.AppImage
+```
+
+### Release checklist additions (Linux)
+- [ ] Verify `.deb` installs and registers `xdg-mime` association correctly
+- [ ] Verify `.AppImage` runs on a clean Ubuntu/Fedora VM
+- [ ] Confirm `mdopen` CLI lands in `/usr/bin` (`.deb`) or alongside the AppImage
+
+## 8. Checklist for Each Release
 
 - [ ] Update `version` in `src-tauri/tauri.conf.json`
 - [ ] Update `version` in `package.json`

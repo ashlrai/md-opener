@@ -6,7 +6,12 @@ on:
   pull_request:
 
 jobs:
-  check:
+  # ---------------------------------------------------------------------------
+  # macOS check: JS quality gates + Rust workspace check.
+  # This is the primary check job and runs the full suite.
+  # ---------------------------------------------------------------------------
+  check-macos:
+    name: Check (macOS)
     runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
@@ -41,6 +46,46 @@ jobs:
 
       - name: Frontend build
         run: bunx vite build
+
+      - name: Rust check (workspace)
+        run: cargo check --workspace --manifest-path src-tauri/Cargo.toml
+
+  # ---------------------------------------------------------------------------
+  # Linux check: catches cross-platform Rust compile breakage on PRs cheaply.
+  # Runs only `cargo check` (no JS/Swift) against the Linux target.
+  # ---------------------------------------------------------------------------
+  check-linux:
+    name: Check (Linux)
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-r2-${{ hashFiles('src-tauri/Cargo.lock') }}
+
+      # Tauri 2 Linux prerequisites — required for tauri-build to compile.
+      - name: Install Linux system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            build-essential \
+            curl \
+            wget \
+            file \
+            libxdo-dev \
+            libssl-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf
 
       - name: Rust check (workspace)
         run: cargo check --workspace --manifest-path src-tauri/Cargo.toml
