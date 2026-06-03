@@ -240,6 +240,18 @@ export function getCommands(): Command[] {
       run: () => pickAndWatchFolder(),
     },
 
+    // ── Outline ───────────────────────────────────────────────────────────
+    {
+      id: "view.outline.toggle",
+      title: "Toggle Outline",
+      group: "View",
+      hint: "Document table of contents",
+      keywords: ["outline", "toc", "table of contents", "headings", "navigate"],
+      shortcut: "mod+shift+o",
+      when: () => useDocumentStore.getState().path != null,
+      run: () => ui().toggleOutline(),
+    },
+
     // ── EXTENSION POINT ──────────────────────────────────────────────────
     // Future features append their commands here (or push onto this array
     // from their own module re-exported into getCommands). Planned:

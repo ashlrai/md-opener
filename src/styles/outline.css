@@ -1,0 +1,202 @@
+/* Outline / table-of-contents panel — left-hand overlay.
+   Mirrors the Agent Activity drawer (src/styles/activity-drawer.css): a fixed,
+   left-docked panel that slides in, shares the same z-index band, and is
+   mutually exclusive with the Activity drawer via uiStore. All colours come
+   from theme custom properties — no hard-coded palette values. */
+
+/* ===========================================================================
+   Panel shell
+   =========================================================================== */
+
+.outline-panel {
+  position: fixed;
+  top: 44px; /* below .titlebar */
+  left: 0;
+  bottom: 26px; /* above .statusbar */
+  width: 300px;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  box-shadow: 4px 0 24px rgba(0, 0, 0, 0.08);
+  z-index: 200;
+  /* Slide-in from left */
+  transform: translateX(-100%);
+  opacity: 0;
+  transition:
+    transform 0.16s cubic-bezier(0.32, 0, 0.15, 1),
+    opacity 0.16s ease;
+  pointer-events: none;
+}
+
+.outline-panel.outline-panel--open {
+  transform: translateX(0);
+  opacity: 1;
+  pointer-events: auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .outline-panel {
+    transition: opacity 0.16s ease;
+  }
+}
+
+/* ----- Header ----- */
+
+.outline-panel__header {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px 10px 14px;
+  border-bottom: 1px solid var(--border);
+  user-select: none;
+}
+
+.outline-panel__title {
+  flex: 1;
+  min-width: 0;
+  font-size: 12.5px;
+  font-weight: 650;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.outline-panel__close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  cursor: pointer;
+  flex: 0 0 auto;
+  transition:
+    background 0.1s ease,
+    color 0.1s ease;
+}
+.outline-panel__close:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+.outline-panel__close svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* ===========================================================================
+   Empty state
+   =========================================================================== */
+
+.outline-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 22px;
+  gap: 10px;
+  text-align: center;
+}
+
+.outline-empty__icon {
+  font-size: 34px;
+  line-height: 1;
+}
+
+.outline-empty__title {
+  font-size: 14px;
+  font-weight: 650;
+  color: var(--text);
+  margin: 0;
+}
+
+.outline-empty__body {
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  line-height: 1.55;
+  margin: 0;
+  max-width: 240px;
+}
+
+/* ===========================================================================
+   Heading tree
+   =========================================================================== */
+
+.outline-list {
+  flex: 1 1 0;
+  overflow-y: auto;
+  margin: 0;
+  padding: 6px 8px;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  scrollbar-width: thin;
+}
+
+.outline-item {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  width: 100%;
+  /* Depth indent applied inline via --outline-indent. */
+  padding: 5px 8px 5px calc(8px + var(--outline-indent, 0px));
+  background: transparent;
+  border: none;
+  border-left: 2px solid transparent;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  text-align: left;
+  color: var(--text-secondary);
+  font-family: var(--ui-font);
+  line-height: 1.4;
+  transition:
+    background 0.1s ease,
+    color 0.1s ease;
+}
+.outline-item:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+/* Top-level headings read as primary; deeper ones recede. */
+.outline-item[data-depth="1"] {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+}
+.outline-item[data-depth="2"] {
+  font-size: 12.5px;
+  font-weight: 550;
+}
+.outline-item[data-depth="3"],
+.outline-item[data-depth="4"],
+.outline-item[data-depth="5"],
+.outline-item[data-depth="6"] {
+  font-size: 12px;
+}
+
+.outline-item--active {
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+  border-left-color: var(--accent);
+  color: var(--accent);
+}
+.outline-item--active:hover {
+  background: color-mix(in srgb, var(--accent) 16%, var(--surface));
+  color: var(--accent);
+}
+
+.outline-item__text {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

@@ -15,6 +15,10 @@ interface UiState {
   openActivity: () => void;
   closeActivity: () => void;
   toggleActivity: () => void;
+  outlineOpen: boolean;
+  openOutline: () => void;
+  closeOutline: () => void;
+  toggleOutline: () => void;
 }
 
 /**
@@ -33,8 +37,16 @@ export const useUiStore = create<UiState>((set) => ({
   closeCommandPalette: () => set({ commandPaletteOpen: false }),
   toggleCommandPalette: () =>
     set((s) => ({ commandPaletteOpen: !s.commandPaletteOpen })),
+  // Activity and Outline share the left dock and are mutually exclusive:
+  // opening one closes the other.
   activityOpen: false,
-  openActivity: () => set({ activityOpen: true }),
+  openActivity: () => set({ activityOpen: true, outlineOpen: false }),
   closeActivity: () => set({ activityOpen: false }),
-  toggleActivity: () => set((s) => ({ activityOpen: !s.activityOpen })),
+  toggleActivity: () =>
+    set((s) => ({ activityOpen: !s.activityOpen, outlineOpen: false })),
+  outlineOpen: false,
+  openOutline: () => set({ outlineOpen: true, activityOpen: false }),
+  closeOutline: () => set({ outlineOpen: false }),
+  toggleOutline: () =>
+    set((s) => ({ outlineOpen: !s.outlineOpen, activityOpen: false })),
 }));

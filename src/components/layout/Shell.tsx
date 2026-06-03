@@ -10,6 +10,7 @@ import { DefaultHandlerBanner } from "../DefaultHandlerBanner";
 import { MarkdownEditor } from "../editor/MarkdownEditor";
 import { SourceEditor } from "../editor/SourceEditor";
 import { ExportDialog } from "../export/ExportDialog";
+import { Outline } from "../Outline";
 import { SettingsPanel } from "../settings/SettingsPanel";
 import { Renderer } from "../viewer/Renderer";
 import { Welcome } from "../Welcome";
@@ -78,6 +79,7 @@ export function Shell({ dragOver }: ShellProps) {
       </main>
       <StatusBar />
       <ActivityDrawer />
+      <Outline />
       <AISidebar />
       <SelectionPopover />
       {exportOpen && <ExportDialog />}
