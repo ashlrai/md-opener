@@ -50,6 +50,23 @@ function parse(shortcut: string): ParsedShortcut {
 }
 
 /**
+ * Map a shifted punctuation character back to the unshifted key it lives on,
+ * so a shortcut written with the base key (e.g. "mod+shift+]") still matches
+ * even though the browser reports the shifted glyph in `KeyboardEvent.key`
+ * (e.g. "}" for Shift+]). Only the keys we actually bind need entries.
+ */
+const SHIFTED_TO_BASE: Record<string, string> = {
+  "}": "]",
+  "{": "[",
+};
+
+/** Normalize an event's key to the bare, lowercased token used in shortcuts. */
+function eventKey(e: KeyboardEvent): string {
+  const k = e.key.toLowerCase();
+  return SHIFTED_TO_BASE[k] ?? k;
+}
+
+/**
  * True when `e` matches `shortcut`. Modifier matching is exact for mod / shift
  * / alt so that e.g. "mod+l" does not also fire on "mod+shift+l".
  */
@@ -65,7 +82,7 @@ export function matchShortcut(e: KeyboardEvent, shortcut: string): boolean {
   if (s.shift !== e.shiftKey) return false;
   if (s.alt !== e.altKey) return false;
 
-  return e.key.toLowerCase() === s.key;
+  return eventKey(e) === s.key;
 }
 
 /**

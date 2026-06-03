@@ -256,10 +256,37 @@ export function getCommands(): Command[] {
     // Future features append their commands here (or push onto this array
     // from their own module re-exported into getCommands). Planned:
     //   • New Tab        — "mod+t"
-    //   • Next Tab       — "mod+shift+]" / "ctrl+tab"
-    //   • Toggle Outline — "mod+shift+o"
     //   • Toggle Activity— "mod+shift+a"
     // Each should carry a `when()` predicate and (optionally) a `shortcut`.
+
+    // ── Tabs ──────────────────────────────────────────────────────────────
+    {
+      id: "tab.next",
+      title: "Next tab",
+      group: "View",
+      keywords: ["tab", "next", "switch", "document", "cycle"],
+      shortcut: "mod+shift+]",
+      when: () => doc().tabs.length > 0,
+      run: () => doc().nextTab(),
+    },
+    {
+      id: "tab.prev",
+      title: "Previous tab",
+      group: "View",
+      keywords: ["tab", "previous", "prev", "switch", "document", "cycle"],
+      shortcut: "mod+shift+[",
+      when: () => doc().tabs.length > 0,
+      run: () => doc().prevTab(),
+    },
+    {
+      id: "tab.close",
+      title: "Close tab",
+      group: "View",
+      keywords: ["tab", "close", "shut", "document"],
+      shortcut: "mod+w",
+      when: () => doc().tabs.length > 0,
+      run: () => doc().close(),
+    },
   ];
 
   return commands;

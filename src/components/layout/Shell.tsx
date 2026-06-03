@@ -16,6 +16,7 @@ import { Renderer } from "../viewer/Renderer";
 import { Welcome } from "../Welcome";
 import { ExternalChangeBanner } from "./ExternalChangeBanner";
 import { StatusBar } from "./StatusBar";
+import { TabBar } from "./TabBar";
 import { TitleBar } from "./TitleBar";
 
 interface ShellProps {
@@ -52,6 +53,8 @@ export function Shell({ dragOver }: ShellProps) {
   return (
     <div className={`app-shell${dragOver ? " drag-over" : ""}`}>
       <TitleBar />
+      {/* Renders nothing unless 2+ docs are open — single-doc layout unchanged. */}
+      <TabBar />
       {externalChange && <ExternalChangeBanner />}
       <DefaultHandlerBanner />
       <main

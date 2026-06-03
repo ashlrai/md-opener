@@ -1,0 +1,111 @@
+/* ---- Tab bar (multi-document) ----
+   Sits in normal flow directly below the title bar. Only rendered when 2+
+   documents are open, so the single-document layout is unchanged. Mirrors the
+   title bar's calm, themed look (var(--surface)/var(--accent)/var(--border)). */
+.tabbar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: stretch;
+  height: 34px;
+  padding: 0 8px;
+  gap: 2px;
+  background: var(--bg-titlebar);
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+  user-select: none;
+}
+/* Keep the strip slim; hide the horizontal scrollbar chrome on WebKit. */
+.tabbar::-webkit-scrollbar {
+  height: 0;
+}
+
+/* A tab is a flex row holding the switch button + close button. */
+.tab {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  max-width: 200px;
+  height: 26px;
+  margin: 4px 0;
+  padding: 0 4px 0 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  transition: background 0.12s ease;
+}
+.tab:hover {
+  background: var(--surface-hover);
+}
+.tab.active {
+  background: var(--surface);
+  border-color: var(--border);
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+
+/* The button that fills the row and switches to the tab. */
+.tab-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 100%;
+  padding: 0 4px 0 10px;
+  font-size: 12.5px;
+  font-weight: 550;
+  color: var(--text-secondary);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: color 0.12s ease;
+}
+.tab:hover .tab-switch,
+.tab.active .tab-switch {
+  color: var(--text);
+}
+
+.tab-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tab-dirty {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  flex: 0 0 auto;
+}
+
+.tab-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  padding: 0;
+  border: none;
+  background: transparent;
+  border-radius: 4px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s ease, background 0.12s ease, color 0.12s ease;
+}
+/* Reveal the close affordance on hover or for the active tab. */
+.tab:hover .tab-close,
+.tab.active .tab-close {
+  opacity: 1;
+}
+.tab-close:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+.tab-close svg {
+  width: 11px;
+  height: 11px;
+}
