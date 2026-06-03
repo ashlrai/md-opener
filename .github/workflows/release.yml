@@ -67,6 +67,11 @@ jobs:
     permissions:
       contents: write   # Required to create the GitHub Release
 
+    # secrets can't be used in `if:` conditions, so surface the one we gate on
+    # as an env var the steps can read.
+    env:
+      HAS_APPLE_SIGNING: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+
     steps:
       - uses: actions/checkout@v4
 
@@ -112,7 +117,7 @@ jobs:
       # CI smoke-tests).
       # -----------------------------------------------------------------------
       - name: Import Apple certificate
-        if: ${{ secrets.APPLE_SIGNING_IDENTITY != '' }}
+        if: ${{ env.HAS_APPLE_SIGNING != '' }}
         env:
           APPLE_CERTIFICATE:          ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
@@ -174,6 +179,6 @@ jobs:
       # Clean up the temporary keychain (best-effort, even if build failed).
       # -----------------------------------------------------------------------
       - name: Clean up keychain
-        if: ${{ always() && secrets.APPLE_SIGNING_IDENTITY != '' }}
+        if: ${{ always() && env.HAS_APPLE_SIGNING != '' }}
         run: |
           security delete-keychain "$RUNNER_TEMP/app-signing.keychain-db" || true
