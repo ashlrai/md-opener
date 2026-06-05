@@ -265,6 +265,30 @@ function FontSizeStepper() {
   );
 }
 
+// ─── Notifications toggle ─────────────────────────────────────────────────────
+
+function NotificationToggle() {
+  const enabled = useSettingsStore((s) => s.notificationsEnabled);
+  const setEnabled = useSettingsStore((s) => s.setNotificationsEnabled);
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={enabled}
+      className={`settings-switch${enabled ? " on" : ""}`}
+      onClick={() => setEnabled(!enabled)}
+      title={
+        enabled
+          ? "Notify me when an agent writes files while Ashlr isn't focused"
+          : "Native notifications are off"
+      }
+    >
+      <span className="settings-switch-knob" aria-hidden="true" />
+      <span className="settings-switch-label">{enabled ? "On" : "Off"}</span>
+    </button>
+  );
+}
+
 // ─── CLI install section ──────────────────────────────────────────────────────
 
 function CliSection() {
@@ -676,6 +700,11 @@ export function SettingsPanel() {
             <div className="settings-row">
               <label className="settings-label">Font size</label>
               <FontSizeStepper />
+            </div>
+
+            <div className="settings-row">
+              <label className="settings-label">Agent notifications</label>
+              <NotificationToggle />
             </div>
           </section>
 

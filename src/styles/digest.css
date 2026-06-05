@@ -1,0 +1,67 @@
+/* digest.css — the "Since you last looked" Agent Activity Digest card. */
+
+.digest-card {
+  margin: 8px 14px 0;
+  padding: 12px 14px;
+  border: 1px solid var(--border, rgba(0, 0, 0, 0.1));
+  border-left: 3px solid var(--accent, #2563eb);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--accent, #2563eb) 6%, var(--surface));
+  box-shadow: var(--shadow-sm, 0 1px 3px rgba(0, 0, 0, 0.08));
+}
+
+.digest-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.digest-card__title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted, #8a8a8a);
+}
+.digest-card__spark {
+  color: var(--accent, #2563eb);
+}
+
+.digest-card__close {
+  border: none;
+  background: none;
+  color: var(--text-muted, #8a8a8a);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 2px 6px;
+  border-radius: 5px;
+}
+.digest-card__close:hover {
+  background: var(--hover, rgba(0, 0, 0, 0.06));
+}
+
+.digest-card__body {
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text, #222);
+}
+.digest-card__summary {
+  margin: 0;
+  white-space: pre-wrap;
+}
+.digest-card__loading {
+  color: var(--text-muted, #8a8a8a);
+  font-style: italic;
+}
+
+.digest-card__actions {
+  margin-top: 10px;
+}
+
+.app-shell.zen .digest-card {
+  display: none;
+}

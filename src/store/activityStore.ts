@@ -14,7 +14,10 @@ import {
   listMarkdownFiles,
   type MdFileInfo,
 } from "../lib/activity";
+import { notifyAgentActivity } from "../lib/notify";
+import { useActivationStore } from "./activationStore";
 import { useDocumentStore } from "./documentStore";
+import { useSettingsStore } from "./settingsStore";
 import { toast } from "./toastStore";
 import { useUiStore } from "./uiStore";
 
@@ -46,6 +49,18 @@ function flushNewFileToast() {
     toast.info(`${batch.length} new files`, {
       onClick: () => useUiStore.getState().openActivity(),
     });
+  }
+
+  // When the app isn't focused, also fire a native OS notification — ONLY for
+  // this real agent activity, never on a timer. Honors the user's setting.
+  if (
+    typeof document !== "undefined" &&
+    !document.hasFocus() &&
+    useSettingsStore.getState().notificationsEnabled
+  ) {
+    const body =
+      batch.length === 1 ? batch[0].name : `${batch.length} new files from your agent`;
+    void notifyAgentActivity("Ashlr MD", body);
   }
 }
 
@@ -102,7 +117,12 @@ export const useActivityStore = create<ActivityState>()(
       unseen: [],
       lastError: null,
 
-      setWatchedDir: (dir) => set({ watchedDir: dir, lastError: null }),
+      setWatchedDir: (dir) => {
+        set({ watchedDir: dir, lastError: null });
+        // Watching a folder is the primary activation event ("Ashlr is where my
+        // agent's markdown lands"). Recorded locally for first-run gating.
+        if (dir) useActivationStore.getState().markActivated();
+      },
 
       loadFiles: async () => {
         const dir = get().watchedDir;

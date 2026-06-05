@@ -7,6 +7,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { DOC_ACTIONS } from "../../ai/actions";
 import {
   detectProvider,
+  getCachedProvider,
   NOOP_PROVIDER_ID,
   runSelectionAction,
 } from "../../ai/registry";
@@ -230,11 +231,20 @@ export function AISidebar() {
 
   const isNoop = providerId === NOOP_PROVIDER_ID;
 
-  // Detect provider when sidebar opens.
+  // Detect provider when sidebar opens. Use the startup-warmed cache for an
+  // instant render (no "Detecting…" wall), then refresh silently in the
+  // background so a newly-installed Ollama still gets picked up.
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
-    setDetecting(true);
+    const cached = getCachedProvider();
+    if (cached) {
+      setResolvedProvider(cached);
+      setProvider(cached.id, cached.capabilities);
+      setDetecting(false);
+    } else {
+      setDetecting(true);
+    }
     detectProvider().then((p) => {
       if (cancelled) return;
       setResolvedProvider(p);

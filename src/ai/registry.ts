@@ -312,6 +312,18 @@ const PROVIDERS: AIProvider[] = [
 
 const NOOP = new NoOpProvider();
 
+/**
+ * The most recently resolved provider, cached so the sidebar can render the
+ * right state instantly instead of showing a "Detecting…" wall on every open.
+ * Warmed once at startup (see App.tsx).
+ */
+let cachedProvider: AIProvider | null = null;
+
+/** The last resolved provider, or null if detection hasn't run yet. */
+export function getCachedProvider(): AIProvider | null {
+  return cachedProvider;
+}
+
 // ---------------------------------------------------------------------------
 // detectProvider — runs the chain and returns the first available provider
 // ---------------------------------------------------------------------------
@@ -326,11 +338,15 @@ const NOOP = new NoOpProvider();
 export async function detectProvider(): Promise<AIProvider> {
   for (const provider of PROVIDERS) {
     try {
-      if (await provider.isAvailable()) return provider;
+      if (await provider.isAvailable()) {
+        cachedProvider = provider;
+        return provider;
+      }
     } catch {
       // A detection error is non-fatal — try the next tier.
     }
   }
+  cachedProvider = NOOP;
   return NOOP;
 }
 

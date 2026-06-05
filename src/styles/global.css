@@ -418,6 +418,30 @@ select:focus-visible {
   text-align: right;
 }
 
+.welcome-values {
+  list-style: none;
+  margin: 18px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  text-align: left;
+  max-width: 360px;
+}
+.welcome-values li {
+  position: relative;
+  padding-left: 20px;
+  font-size: 12.5px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+.welcome-values li::before {
+  content: "→";
+  position: absolute;
+  left: 2px;
+  color: var(--accent);
+}
+
 .welcome-hint {
   margin-top: 22px;
   font-size: 12px;

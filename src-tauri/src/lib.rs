@@ -31,6 +31,7 @@ pub fn run() {
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_notification::init())
         .manage(PendingFiles::default())
         .manage(watcher::FileWatcher::default())
         .manage(ipc::DocMirror::default())
@@ -41,6 +42,7 @@ pub fn run() {
             document::read_markdown_file,
             document::write_markdown_file,
             document::resolve_wikilink,
+            document::filter_existing,
             export::write_file_bytes,
             file_handler::take_pending_files,
             watcher::watch_file,

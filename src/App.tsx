@@ -2,14 +2,20 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { useEffect, useState } from "react";
+import { detectProvider } from "./ai/registry";
 import { Shell } from "./components/layout/Shell";
 import { getShortcutCommands } from "./lib/commands";
 import { matchShortcut } from "./lib/keymap";
+import { restoreSession } from "./lib/session";
 import { checkForUpdates } from "./lib/updater";
 import { useMcpBridge } from "./mcp/bridge";
+import { useActivationStore } from "./store/activationStore";
 import { useAIStore } from "./store/aiStore";
+import { useDigestStore } from "./store/digestStore";
 import { useDocumentStore } from "./store/documentStore";
+import { useSessionStore } from "./store/sessionStore";
 import { useSettingsStore } from "./store/settingsStore";
+import { toast } from "./store/toastStore";
 import { useUiStore } from "./store/uiStore";
 import "./styles/themes.css";
 import "./styles/global.css";
@@ -37,20 +43,44 @@ export default function App() {
     root.style.setProperty("--content-width", `${contentWidth}px`);
   }, [theme, fontSize, contentWidth]);
 
-  // Open files: drain anything buffered before mount, then listen for live opens.
+  // Open files: drain anything buffered before mount; if the user didn't
+  // double-click a file, restore the previous session ("continue where you left
+  // off"). Then start persisting session changes and listen for live opens.
   useEffect(() => {
     let unlisten: (() => void) | undefined;
+    let unsubSave: (() => void) | undefined;
     (async () => {
       const pending = await invoke<string[]>("take_pending_files").catch(
         () => [] as string[],
       );
-      if (pending.length) openPath(pending[pending.length - 1]);
+      if (pending.length) {
+        // Open every queued file (openPath dedupes); the last stays active.
+        for (const p of pending) await openPath(p);
+      } else {
+        const n = await restoreSession();
+        if (n >= 1) {
+          toast.info(
+            `Reopened ${n} document${n > 1 ? "s" : ""} from your last session`,
+          );
+        }
+      }
+      // Persist the live tab set from here on — AFTER restore, so the initial
+      // empty state can't clobber the saved session before it's restored.
+      unsubSave = useDocumentStore.subscribe((s) => {
+        useSessionStore.getState().save(
+          s.tabs.map((t) => ({ path: t.path, viewMode: t.viewMode })),
+          s.tabs.find((t) => t.id === s.activeId)?.path ?? null,
+        );
+      });
       unlisten = await listen<string[]>("file-opened", (e) => {
         const paths = e.payload;
         if (paths.length) openPath(paths[paths.length - 1]);
       });
     })();
-    return () => unlisten?.();
+    return () => {
+      unlisten?.();
+      unsubSave?.();
+    };
   }, [openPath]);
 
   // Native drag-and-drop of files onto the window.
@@ -131,6 +161,29 @@ export default function App() {
   // key out of localStorage) so tier-2 detection works without re-entry.
   useEffect(() => {
     void useAIStore.getState().loadApiKey();
+  }, []);
+
+  // Warm AI provider detection shortly after launch so the sidebar opens
+  // instantly instead of showing a "Detecting…" wall (results are cached).
+  useEffect(() => {
+    const t = setTimeout(() => {
+      void detectProvider().then((p) => {
+        useAIStore.getState().setProvider(p.id, p.capabilities);
+      });
+    }, 2500);
+    return () => clearTimeout(t);
+  }, []);
+
+  // Activation bookkeeping + the "while you were away" Agent Activity Digest.
+  // touchLastSeen returns the PRIOR launch time; if there's a prior session and
+  // a watched folder, summarize what changed since then.
+  useEffect(() => {
+    const a = useActivationStore.getState();
+    a.markFirstRun();
+    const prev = a.touchLastSeen();
+    if (prev != null) {
+      void useDigestStore.getState().generate(prev);
+    }
   }, []);
 
   return <Shell dragOver={dragOver} />;

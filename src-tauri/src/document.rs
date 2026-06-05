@@ -46,6 +46,16 @@ pub fn write_markdown_file(path: String, content: String) -> Result<(), String> 
     Ok(())
 }
 
+/// Return the subset of `paths` that still exist as files on disk.
+/// Used by session restore to skip documents that were moved/deleted.
+#[tauri::command]
+pub fn filter_existing(paths: Vec<String>) -> Vec<String> {
+    paths
+        .into_iter()
+        .filter(|p| Path::new(p).is_file())
+        .collect()
+}
+
 // ---------------------------------------------------------------------------
 // Wikilink resolution ([[target]] / ![[target]])
 // ---------------------------------------------------------------------------
