@@ -249,8 +249,11 @@ jobs:
         id: tauri
         uses: tauri-apps/tauri-action@v0
         env:
-          # Apple signing / notarization (macOS only; no-op when empty)
-          APPLE_SIGNING_IDENTITY:     ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          # Apple signing / notarization (macOS only). When no Developer ID is
+          # configured, fall back to ad-hoc signing ("-") so the macOS bundle
+          # still builds (unsigned/un-notarized) instead of failing codesign with
+          # an empty identity. A real identity (when the secret is set) takes over.
+          APPLE_SIGNING_IDENTITY:     ${{ secrets.APPLE_SIGNING_IDENTITY || '-' }}
           APPLE_ID:                   ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD:             ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID:              ${{ secrets.APPLE_TEAM_ID }}

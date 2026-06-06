@@ -101,9 +101,11 @@ func setAsDefault(bundleURL: URL) {
 
         let box = ErrBox()
         let sema = DispatchSemaphore(value: 0)
-        // macOS 26 SDK exposes the async/throws `setDefaultApplication(at:toOpen:)`;
-        // older SDKs expose the completion-handler `setDefaultApplication(at:toOpenContentType:)`.
-        // Pick the right one at compile time so the helper builds on any Xcode.
+        // The macOS 26 SDK renamed the async `setDefaultApplication` parameter
+        // label `toOpenContentType:` → `toOpen:`. Both SDKs expose the
+        // async/throws form (macOS 12+); the pre-26 completion-handler overload
+        // was removed in the macOS 15 SDK (Xcode 16), so we use the async form on
+        // every Xcode and only switch the label at compile time.
         #if compiler(>=6.2)
         Task {
             do {
@@ -114,8 +116,12 @@ func setAsDefault(bundleURL: URL) {
             sema.signal()
         }
         #else
-        ws.setDefaultApplication(at: bundleURL, toOpenContentType: utType) { error in
-            box.message = error?.localizedDescription
+        Task {
+            do {
+                try await ws.setDefaultApplication(at: bundleURL, toOpenContentType: utType)
+            } catch {
+                box.message = error.localizedDescription
+            }
             sema.signal()
         }
         #endif
