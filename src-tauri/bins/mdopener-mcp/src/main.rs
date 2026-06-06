@@ -85,35 +85,36 @@ fn main() {
 
         let response = match serde_json::from_str::<Request>(&line) {
             Ok(req) => dispatch(req),
-            Err(e) => Response::err(
+            Err(e) => Some(Response::err(
                 Value::Null,
                 -32700,
                 format!("Parse error: {e}"),
-            ),
+            )),
         };
 
-        let mut out = serde_json::to_string(&response).unwrap_or_default();
-        out.push('\n');
-        let _ = stdout.write_all(out.as_bytes());
-        let _ = stdout.flush();
+        // Notifications (dispatch returned None) get no reply.
+        if let Some(response) = response {
+            let mut out = serde_json::to_string(&response).unwrap_or_default();
+            out.push('\n');
+            let _ = stdout.write_all(out.as_bytes());
+            let _ = stdout.flush();
+        }
     }
 }
 
 // ── Method dispatcher ─────────────────────────────────────────────────────────
 
-fn dispatch(req: Request) -> Response {
+fn dispatch(req: Request) -> Option<Response> {
+    // JSON-RPC notifications (methods under "notifications/", carrying no id)
+    // must NOT receive a response. Drop them silently.
+    if req.method.starts_with("notifications/") {
+        return None;
+    }
+
     let id = req.id.clone().unwrap_or(Value::Null);
 
-    match req.method.as_str() {
+    let response = match req.method.as_str() {
         "initialize" => handle_initialize(id, req.params),
-
-        // Client sends this after initialize; we just ack silently.
-        "notifications/initialized" => {
-            // Notifications have no id and expect no response, but we must not
-            // crash.  Return a dummy response that the client will ignore if
-            // id is null.
-            Response::ok(id, json!({}))
-        }
 
         "ping" => Response::ok(id, json!({})),
 
@@ -126,18 +127,52 @@ fn dispatch(req: Request) -> Response {
             handle_tool_call(id, &name, args)
         }
 
+        "resources/list" => handle_resources_list(id),
+        "resources/read" => {
+            let params = req.params.unwrap_or(Value::Null);
+            let uri = params["uri"].as_str().unwrap_or("").to_string();
+            handle_resource_read(id, &uri)
+        }
+
+        "prompts/list" => Response::ok(id, json!({ "prompts": prompts_list() })),
+        "prompts/get" => {
+            let params = req.params.unwrap_or(Value::Null);
+            let name = params["name"].as_str().unwrap_or("").to_string();
+            handle_prompt_get(id, &name)
+        }
+
         other => Response::err(id, -32601, format!("Method not found: {other}")),
-    }
+    };
+    Some(response)
 }
 
 // ── initialize ────────────────────────────────────────────────────────────────
 
-fn handle_initialize(id: Value, _params: Option<Value>) -> Response {
+/// Protocol revisions this server understands. We echo the client's requested
+/// version when it's one of these, else fall back to our baseline.
+const SUPPORTED_PROTOCOLS: [&str; 3] = ["2024-11-05", "2025-03-26", "2025-06-18"];
+const DEFAULT_PROTOCOL: &str = "2024-11-05";
+
+fn handle_initialize(id: Value, params: Option<Value>) -> Response {
+    // Negotiate: honor the client's requested protocolVersion if we support it,
+    // otherwise advertise our baseline (per the MCP lifecycle spec).
+    let requested = params
+        .as_ref()
+        .and_then(|p| p["protocolVersion"].as_str());
+    let protocol = match requested {
+        Some(v) if SUPPORTED_PROTOCOLS.contains(&v) => v,
+        _ => DEFAULT_PROTOCOL,
+    };
+
     Response::ok(
         id,
         json!({
-            "protocolVersion": "2024-11-05",
-            "capabilities": { "tools": {} },
+            "protocolVersion": protocol,
+            "capabilities": {
+                "tools": {},
+                "resources": {},
+                "prompts": {}
+            },
             "serverInfo": {
                 "name": "mdopener-mcp",
                 "version": "0.1.0"
@@ -251,6 +286,58 @@ fn tool_list() -> Value {
                 "properties": { "path": { "type": "string", "description": "Absolute path to the Markdown file." } },
                 "required": ["path"]
             }
+        },
+        {
+            "name": "edit_document",
+            "description": "Make a precise edit to the currently open document by replacing an EXACT substring. The `find` string must occur exactly once — include enough surrounding context to make it unique, or the edit is refused. Prefer this over replace_document for targeted changes.",
+            "annotations": { "title": "Edit Document", "readOnlyHint": false, "destructiveHint": false, "idempotentHint": false, "openWorldHint": false },
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "find": { "type": "string", "description": "The exact text to replace. Must appear exactly once in the document." },
+                    "replace": { "type": "string", "description": "The replacement text." },
+                    "save": { "type": "boolean", "description": "Save to disk after editing. Defaults to false." },
+                    "path": { "type": "string", "description": "Optional: assert this is the open document (errors if a different file is open)." }
+                },
+                "required": ["find", "replace"]
+            }
+        },
+        {
+            "name": "replace_document",
+            "description": "Replace the ENTIRE content of the currently open document. Use edit_document for targeted changes; use this only when rewriting the whole document.",
+            "annotations": { "title": "Replace Document", "readOnlyHint": false, "destructiveHint": true, "idempotentHint": false, "openWorldHint": false },
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "content": { "type": "string", "description": "The new full Markdown content." },
+                    "save": { "type": "boolean", "description": "Save to disk after replacing. Defaults to false." }
+                },
+                "required": ["content"]
+            }
+        },
+        {
+            "name": "search_vault",
+            "description": "Full-text search across the user's vault (the watched folder) and recently opened files. Returns matching files with line numbers and snippets.",
+            "annotations": { "title": "Search Vault", "readOnlyHint": true, "destructiveHint": false, "idempotentHint": true, "openWorldHint": false },
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "query": { "type": "string", "description": "Text to search for (case-insensitive)." },
+                    "limit": { "type": "integer", "description": "Max number of files to return. Defaults to 50." }
+                },
+                "required": ["query"]
+            }
+        },
+        {
+            "name": "present_document",
+            "description": "Open a document (if a path is given) and switch Ashlr MD into a distraction-free, full-screen reading presentation — ideal for showing the human a finished result.",
+            "annotations": { "title": "Present Document", "readOnlyHint": false, "destructiveHint": false, "idempotentHint": true, "openWorldHint": false },
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "path": { "type": "string", "description": "Optional absolute path to open before presenting. Omit to present the current document." }
+                }
+            }
         }
     ])
 }
@@ -266,6 +353,10 @@ fn handle_tool_call(id: Value, name: &str, args: Value) -> Response {
         "export" => tool_export(id, &args),
         "request_review" => tool_request_review(id, &args),
         "get_user_annotations" => tool_get_annotations(id, &args),
+        "edit_document" => tool_edit_document(id, &args),
+        "replace_document" => tool_replace_document(id, &args),
+        "search_vault" => tool_search_vault(id, &args),
+        "present_document" => tool_present_document(id, &args),
         other => Response::err(id, -32602, format!("Unknown tool: {other}")),
     }
 }
@@ -446,6 +537,186 @@ fn tool_get_annotations(id: Value, args: &Value) -> Response {
     }
 }
 
+// ── Document edit / search / present tools ───────────────────────────────────
+
+fn tool_edit_document(id: Value, args: &Value) -> Response {
+    let find = match args["find"].as_str() {
+        Some(f) => f.to_string(),
+        None => return Response::err(id, -32602, "`find` is required"),
+    };
+    let replace = match args["replace"].as_str() {
+        Some(r) => r.to_string(),
+        None => return Response::err(id, -32602, "`replace` is required"),
+    };
+    let save = args["save"].as_bool().unwrap_or(false);
+
+    let mut body = json!({ "find": find, "replace": replace, "save": save });
+    if let Some(p) = args["path"].as_str() {
+        body["path"] = json!(p);
+    }
+
+    match ipc_post("/edit", body) {
+        Ok(v) => {
+            // The server reports not-found / not-unique as ok:false so the agent
+            // gets the reason as a tool error rather than an opaque HTTP failure.
+            if v["ok"].as_bool() == Some(false) {
+                let msg = v["error"].as_str().unwrap_or("Edit could not be applied.");
+                return tool_error(id, msg.to_string());
+            }
+            tool_result(id, v)
+        }
+        Err(e) => Response::err(id, -32000, app_not_running_msg(&e)),
+    }
+}
+
+fn tool_replace_document(id: Value, args: &Value) -> Response {
+    let content = match args["content"].as_str() {
+        Some(c) => c.to_string(),
+        None => return Response::err(id, -32602, "`content` is required"),
+    };
+    let save = args["save"].as_bool().unwrap_or(false);
+    match ipc_post("/content", json!({ "content": content, "save": save })) {
+        Ok(v) => tool_result(id, v),
+        Err(e) => Response::err(id, -32000, app_not_running_msg(&e)),
+    }
+}
+
+fn tool_search_vault(id: Value, args: &Value) -> Response {
+    let query = match args["query"].as_str() {
+        Some(q) => q.to_string(),
+        None => return Response::err(id, -32602, "`query` is required"),
+    };
+    let limit = args["limit"].as_u64().unwrap_or(50);
+    let encoded = urlencoding::encode(&query);
+    match ipc_get(&format!("/search?q={encoded}&limit={limit}")) {
+        Ok(v) => tool_result(id, v),
+        Err(e) => Response::err(id, -32000, app_not_running_msg(&e)),
+    }
+}
+
+fn tool_present_document(id: Value, args: &Value) -> Response {
+    let path = args["path"].as_str().map(|p| {
+        std::fs::canonicalize(p)
+            .map(|c| c.to_string_lossy().into_owned())
+            .unwrap_or_else(|_| p.to_string())
+    });
+    match ipc_post("/present", json!({ "path": path })) {
+        Ok(v) => tool_result(id, v),
+        Err(e) => Response::err(id, -32000, app_not_running_msg(&e)),
+    }
+}
+
+// ── Resources ────────────────────────────────────────────────────────────────
+
+fn handle_resources_list(id: Value) -> Response {
+    let mut resources = vec![json!({
+        "uri": "mdopener://current",
+        "name": "Current document",
+        "description": "The document currently open in Ashlr MD.",
+        "mimeType": "text/markdown"
+    })];
+
+    // Add the vault's files (best-effort — empty if the app isn't running).
+    if let Ok(v) = ipc_get("/vault") {
+        if let Some(files) = v["files"].as_array() {
+            for f in files {
+                if let Some(p) = f["path"].as_str() {
+                    resources.push(json!({
+                        "uri": format!("file://{p}"),
+                        "name": f["name"].as_str().unwrap_or(p),
+                        "mimeType": "text/markdown"
+                    }));
+                }
+            }
+        }
+    }
+
+    Response::ok(id, json!({ "resources": resources }))
+}
+
+fn handle_resource_read(id: Value, uri: &str) -> Response {
+    if uri == "mdopener://current" {
+        return match ipc_get("/content") {
+            Ok(v) => {
+                let text = v["content"].as_str().unwrap_or("").to_string();
+                Response::ok(id, json!({
+                    "contents": [{ "uri": uri, "mimeType": "text/markdown", "text": text }]
+                }))
+            }
+            Err(e) => Response::err(id, -32000, app_not_running_msg(&e)),
+        };
+    }
+    if let Some(p) = uri.strip_prefix("file://") {
+        // Only read files the server actually advertised in resources/list (the
+        // vault + recents). This keeps the resource channel honest and prevents
+        // it being used as an arbitrary-filesystem read primitive.
+        if !is_advertised_path(p) {
+            return Response::err(id, -32002, format!("Resource not in vault: {uri}"));
+        }
+        return match std::fs::read_to_string(p) {
+            Ok(text) => Response::ok(id, json!({
+                "contents": [{ "uri": uri, "mimeType": "text/markdown", "text": text }]
+            })),
+            // -32002 = "Resource not found" in the MCP spec.
+            Err(e) => Response::err(id, -32002, format!("Cannot read {p}: {e}")),
+        };
+    }
+    Response::err(id, -32602, format!("Unknown resource URI: {uri}"))
+}
+
+/// True if `path` is one of the files the app currently advertises as part of
+/// the vault or recents (queried live). Used to scope `resources/read`.
+fn is_advertised_path(path: &str) -> bool {
+    let Ok(v) = ipc_get("/vault") else {
+        return false;
+    };
+    let in_files = v["files"]
+        .as_array()
+        .map(|a| a.iter().any(|f| f["path"].as_str() == Some(path)))
+        .unwrap_or(false);
+    let in_recents = v["recents"]
+        .as_array()
+        .map(|a| a.iter().any(|r| r.as_str() == Some(path)))
+        .unwrap_or(false);
+    in_files || in_recents
+}
+
+// ── Prompts ──────────────────────────────────────────────────────────────────
+
+fn prompts_list() -> Value {
+    json!([
+        { "name": "summarize", "description": "Summarize the current document into key points." },
+        { "name": "review_plan", "description": "Review the current document as a plan and flag risks, gaps, and unclear steps." },
+        { "name": "improve_writing", "description": "Tighten the prose of the current document without changing its meaning." }
+    ])
+}
+
+fn handle_prompt_get(id: Value, name: &str) -> Response {
+    let instruction = match name {
+        "summarize" => {
+            "Summarize the following Markdown document into a short bulleted list of its key points:"
+        }
+        "review_plan" => {
+            "Review the following Markdown document as an implementation plan. Identify risks, missing steps, and anything ambiguous:"
+        }
+        "improve_writing" => {
+            "Improve the writing of the following Markdown document — tighten prose and fix grammar without changing its meaning or structure:"
+        }
+        other => return Response::err(id, -32602, format!("Unknown prompt: {other}")),
+    };
+    // Embed the live document so the resulting prompt is self-contained.
+    let content = ipc_get("/content")
+        .ok()
+        .and_then(|v| v["content"].as_str().map(str::to_string))
+        .unwrap_or_default();
+    let text = format!("{instruction}\n\n---\n\n{content}");
+
+    Response::ok(id, json!({
+        "description": format!("Apply the '{name}' prompt to the current Ashlr MD document"),
+        "messages": [{ "role": "user", "content": { "type": "text", "text": text } }]
+    }))
+}
+
 // ── IPC helpers ────────────────────────────────────────────────────────────────
 /// Read the port written by the running app.
 fn read_ipc_port() -> Result<u16, String> {
@@ -600,6 +871,18 @@ fn tool_result(id: Value, value: Value) -> Response {
         json!({
             "content": [{ "type": "text", "text": value.to_string() }],
             "isError": false
+        }),
+    )
+}
+
+/// A tool-level error (the call reached the app but the operation was rejected,
+/// e.g. an ambiguous edit). Distinct from a JSON-RPC transport error.
+fn tool_error(id: Value, message: String) -> Response {
+    Response::ok(
+        id,
+        json!({
+            "content": [{ "type": "text", "text": message }],
+            "isError": true
         }),
     )
 }

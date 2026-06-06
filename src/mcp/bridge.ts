@@ -14,21 +14,24 @@
  * ## How it works
  *
  * PUSH (frontend → Rust):
- *   Subscribes to the Zustand documentStore and recentStore.  On every change
- *   (debounced 200 ms) it calls `mcp_sync_state` so the IPC `/content` and
- *   `/recent` endpoints always return fresh data.
+ *   Subscribes to documentStore + recentStore (→ `mcp_sync_state`, keeps
+ *   `/content` and `/recent` fresh) and activityStore (→ `mcp_sync_vault`, keeps
+ *   `/vault` and `/search` fresh). Both debounced 200 ms.
  *
  * PULL (Rust → frontend):
- *   Listens for three Tauri events emitted by the IPC server (or deep-link
- *   handler) and routes them to the appropriate store action:
+ *   Listens for Tauri events emitted by the IPC server (or deep-link handler)
+ *   and routes them to the appropriate store action:
  *     - `mcp://open`        → documentStore.openPath()
  *     - `mcp://set-content` → documentStore.setContent() [+ optional save]
  *     - `mcp://export`      → uiStore.openExport() after optionally switching doc
+ *     - `mcp://review`      → reviewStore.registerReview()
+ *     - `mcp://present`     → read view + uiStore.openZen() (distraction-free)
  */
 
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { useEffect, useRef } from "react";
+import { useActivityStore } from "../store/activityStore";
 import { useDocumentStore } from "../store/documentStore";
 import { useRecentStore } from "../store/recentStore";
 import { useReviewStore } from "../store/reviewStore";
@@ -58,11 +61,16 @@ interface ReviewPayload {
   timeoutMs: number;
 }
 
+interface PresentPayload {
+  path: string | null;
+}
+
 // ── Hook ──────────────────────────────────────────────────────────────────────
 
 export function useMcpBridge(): void {
-  // Keep a ref to the debounce timer so we can clear it on cleanup.
+  // Keep refs to the debounce timers so we can clear them on cleanup.
   const syncTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const vaultTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     // ── 1. Subscribe to store changes and push to Rust (debounced 200 ms) ──
@@ -84,12 +92,30 @@ export function useMcpBridge(): void {
       syncTimer.current = setTimeout(syncNow, 200);
     };
 
-    // Subscribe to both stores.  Zustand subscribe returns an unsubscribe fn.
+    // Mirror the watched folder ("vault") so /vault and /search can enumerate it.
+    const syncVaultNow = () => {
+      const { watchedDir, files } = useActivityStore.getState();
+      invoke("mcp_sync_vault", {
+        watchedDir: watchedDir ?? null,
+        files: files.map((f) => ({ path: f.path, name: f.name, dir: f.dir })),
+      }).catch((e) => {
+        console.warn("[mcp bridge] mcp_sync_vault failed:", e);
+      });
+    };
+
+    const scheduleVaultSync = () => {
+      if (vaultTimer.current !== null) clearTimeout(vaultTimer.current);
+      vaultTimer.current = setTimeout(syncVaultNow, 200);
+    };
+
+    // Subscribe to the stores.  Zustand subscribe returns an unsubscribe fn.
     const unsubDoc = useDocumentStore.subscribe(scheduleSync);
     const unsubRecent = useRecentStore.subscribe(scheduleSync);
+    const unsubActivity = useActivityStore.subscribe(scheduleVaultSync);
 
     // Push the current state immediately on mount.
     syncNow();
+    syncVaultNow();
 
     // ── 2. Listen for Tauri events from the IPC server ──────────────────────
     const unlisteners: Promise<UnlistenFn>[] = [];
@@ -151,11 +177,35 @@ export function useMcpBridge(): void {
       }),
     );
 
+    // mcp://present — open a doc (if given) and enter distraction-free reading.
+    unlisteners.push(
+      listen<PresentPayload>("mcp://present", (e) => {
+        const doc = useDocumentStore.getState();
+        const enterPresent = () => {
+          useDocumentStore.getState().setViewMode("read");
+          useUiStore.getState().openZen();
+        };
+        const { path } = e.payload;
+        if (path) {
+          doc
+            .openPath(path)
+            .then(enterPresent)
+            .catch((err) => {
+              console.warn("[mcp bridge] mcp://present openPath failed:", err);
+            });
+        } else if (doc.path) {
+          enterPresent();
+        }
+      }),
+    );
+
     // ── Cleanup ──────────────────────────────────────────────────────────────
     return () => {
       unsubDoc();
       unsubRecent();
+      unsubActivity();
       if (syncTimer.current !== null) clearTimeout(syncTimer.current);
+      if (vaultTimer.current !== null) clearTimeout(vaultTimer.current);
       // Resolve all unlisten promises and call each one.
       Promise.all(unlisteners).then((fns) => {
         for (const fn of fns) fn();
