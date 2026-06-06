@@ -14,6 +14,13 @@
 //! | POST   | /open      | `{"path":"…","mode":"read|edit"}`     | Open a file                        |
 //! | GET    | /recent    | `?limit=N` (default 10)               | Recent-file list                   |
 //! | POST   | /export    | `{"format":"pdf|docx|html","outputPath":"…|null"}` | Trigger export |
+//! | GET    | /vault     | —                                     | Watched-folder files + recents     |
+//! | GET    | /search    | `?q=…&limit=N`                        | Full-text search across the vault  |
+//! | POST   | /edit      | `{"find":"…","replace":"…","save":bool}` | Exact find/replace on live doc  |
+//! | POST   | /present   | `{"path":"…|null"}`                   | Open + distraction-free reading    |
+//!
+//! Auth: every endpoint except `/health` requires `Authorization: Bearer <token>`
+//! (the per-session token in `~/.mdopener/ipc-token`).
 //!
 //! Content is kept in [`DocMirror`], a managed Tauri state struct that the
 //! frontend syncs via `mcp_sync_state` on every document change.  Mutations
@@ -67,6 +74,25 @@ pub struct ReviewRecord {
 #[derive(Default)]
 pub struct ReviewState(pub Mutex<std::collections::HashMap<String, ReviewRecord>>);
 
+/// One file in the user's "vault" (the watched folder), mirrored from the
+/// frontend so the MCP `/vault` and `/search` endpoints can enumerate it.
+#[derive(Default, Clone, Serialize, Deserialize)]
+pub struct VaultFileEntry {
+    pub path: String,
+    pub name: String,
+    #[serde(default)]
+    pub dir: String,
+}
+
+#[derive(Default, Clone)]
+pub struct VaultInner {
+    pub watched_dir: Option<String>,
+    pub files: Vec<VaultFileEntry>,
+}
+
+#[derive(Default)]
+pub struct VaultMirror(pub Mutex<VaultInner>);
+
 fn now_ms() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -113,6 +139,18 @@ pub fn set_review_verdict(
             Ok(())
         }
     }
+}
+
+/// Called by the frontend (debounced) when the watched folder or its file list
+/// changes. Keeps [`VaultMirror`] fresh so the `/vault` and `/search` endpoints
+/// can enumerate the user's notes without re-walking the disk per request.
+#[tauri::command]
+pub fn mcp_sync_vault(
+    watched_dir: Option<String>,
+    files: Vec<VaultFileEntry>,
+    vault: tauri::State<VaultMirror>,
+) {
+    *vault.0.lock().unwrap() = VaultInner { watched_dir, files };
 }
 
 // ── IPC port file helpers ─────────────────────────────────────────────────────
@@ -249,6 +287,11 @@ fn run_server(server: Server, app: AppHandle, bearer: std::sync::Arc<String>) {
             (Method::Post, "/review") => handle_review_post(req, &app),
             (Method::Get, "/review/result") => handle_review_result(req, query, &app),
             (Method::Get, "/annotations") => handle_annotations(req, query, &app),
+
+            (Method::Get, "/vault") => handle_vault(req, &app),
+            (Method::Get, "/search") => handle_search(req, query, &app),
+            (Method::Post, "/edit") => handle_edit(req, &app),
+            (Method::Post, "/present") => handle_present(req, &app),
 
             (Method::Get, "/content") => {
                 let mirror = app.state::<DocMirror>();
@@ -496,6 +539,158 @@ fn handle_annotations(req: Request, query: &str, app: &AppHandle) {
     }));
 }
 
+// ── Vault / search / edit / present handlers ──────────────────────────────────
+
+/// GET /vault — enumerate the user's notes: the watched folder's files (mirrored
+/// from the frontend) unioned with recent-file paths.
+fn handle_vault(req: Request, app: &AppHandle) {
+    let vault = app.state::<VaultMirror>().0.lock().unwrap().clone();
+    let recents: Vec<String> = app
+        .state::<RecentMirror>()
+        .0
+        .lock()
+        .unwrap()
+        .iter()
+        .map(|r| r.path.clone())
+        .collect();
+    send_json(req, serde_json::json!({
+        "watchedDir": vault.watched_dir,
+        "files": vault.files,
+        "recents": recents,
+    }));
+}
+
+/// GET /search?q=…&limit=N — full-text search across the vault + recents.
+fn handle_search(req: Request, query: &str, app: &AppHandle) {
+    let q = query
+        .split('&')
+        .find_map(|kv| kv.strip_prefix("q="))
+        .map(|v| urlencoding::decode(v).map(|c| c.into_owned()).unwrap_or_default())
+        .unwrap_or_default();
+    let limit: usize = query
+        .split('&')
+        .find_map(|kv| kv.strip_prefix("limit=").and_then(|v| v.parse::<usize>().ok()))
+        .unwrap_or(50)
+        .clamp(1, 200);
+
+    if q.trim().is_empty() {
+        return send_json(req, serde_json::json!({ "query": q, "results": [] }));
+    }
+
+    // Candidate set = vault files ∪ recents, deduped, locks dropped before search.
+    let mut paths: Vec<String> = Vec::new();
+    let mut seen = std::collections::HashSet::new();
+    {
+        let vault_state = app.state::<VaultMirror>();
+        let vault = vault_state.0.lock().unwrap();
+        for f in vault.files.iter() {
+            if seen.insert(f.path.clone()) {
+                paths.push(f.path.clone());
+            }
+        }
+    }
+    {
+        let recent_state = app.state::<RecentMirror>();
+        let recents = recent_state.0.lock().unwrap();
+        for r in recents.iter() {
+            if seen.insert(r.path.clone()) {
+                paths.push(r.path.clone());
+            }
+        }
+    }
+
+    let results = crate::search::search_files(paths, q.clone(), Some(limit));
+    send_json(req, serde_json::json!({ "query": q, "results": results }));
+}
+
+/// Apply a single exact find→replace, requiring the `find` string to appear
+/// EXACTLY once. Returns the new content, or a human-readable error explaining
+/// why the edit could not be applied unambiguously.
+fn apply_unique_edit(content: &str, find: &str, replace: &str) -> Result<String, String> {
+    if find.is_empty() {
+        return Err("`find` must not be empty.".into());
+    }
+    match content.matches(find).count() {
+        0 => Err("`find` string not found in the current document.".into()),
+        1 => Ok(content.replacen(find, replace, 1)),
+        n => Err(format!(
+            "`find` string is not unique ({n} matches) — include more surrounding context to disambiguate."
+        )),
+    }
+}
+
+/// POST /edit — exact-string find/replace on the live document. Soft failures
+/// (not found / not unique) come back as 200 `{"ok":false,"error":…}` so the
+/// agent sees the reason rather than an opaque HTTP error.
+fn handle_edit(mut req: Request, app: &AppHandle) {
+    #[derive(Deserialize)]
+    struct Body {
+        find: String,
+        replace: String,
+        #[serde(default)]
+        save: bool,
+        path: Option<String>,
+    }
+    let body = match read_json_body::<Body>(&mut req) {
+        Ok(b) => b,
+        Err(e) => return send_error(req, 400, &e),
+    };
+
+    let mirror = app.state::<DocMirror>().0.lock().unwrap().clone();
+
+    // Edits act on the live document. If the caller named a path, make sure it
+    // matches the open doc so they don't silently edit the wrong file. Compare
+    // canonical paths only when BOTH resolve (e.g. both exist on disk); if either
+    // can't be canonicalized, fall back to a raw string compare on both sides so
+    // the two legs are always normalized the same way.
+    if let Some(ref p) = body.path {
+        let have_raw = mirror.path.clone().unwrap_or_default();
+        let want_canon = std::fs::canonicalize(p).ok();
+        let have_canon = std::fs::canonicalize(&have_raw).ok();
+        let matches = match (want_canon, have_canon) {
+            (Some(a), Some(b)) => a == b,
+            _ => p == &have_raw,
+        };
+        if !matches {
+            return send_json(req, serde_json::json!({
+                "ok": false,
+                "error": "The named path is not the currently open document — open it first with open_file.",
+            }));
+        }
+    }
+
+    match apply_unique_edit(&mirror.content, &body.find, &body.replace) {
+        Ok(new_content) => {
+            let _ = app.emit("mcp://set-content", serde_json::json!({
+                "content": new_content,
+                "save": body.save,
+            }));
+            send_json(req, serde_json::json!({ "ok": true, "replaced": 1 }));
+        }
+        Err(e) => send_json(req, serde_json::json!({ "ok": false, "error": e })),
+    }
+}
+
+/// POST /present — open a document (if a path is given) and put the app into a
+/// distraction-free reading presentation. Emits `mcp://present`.
+fn handle_present(mut req: Request, app: &AppHandle) {
+    #[derive(Deserialize)]
+    struct Body {
+        path: Option<String>,
+    }
+    let body = match read_json_body::<Body>(&mut req) {
+        Ok(b) => b,
+        Err(e) => return send_error(req, 400, &e),
+    };
+    let abs = body.path.as_deref().map(|p| {
+        std::fs::canonicalize(p)
+            .map(|c| c.to_string_lossy().into_owned())
+            .unwrap_or_else(|_| p.to_string())
+    });
+    let _ = app.emit("mcp://present", serde_json::json!({ "path": abs }));
+    send_json(req, serde_json::json!({ "ok": true, "path": abs }));
+}
+
 // ── HTTP response helpers ─────────────────────────────────────────────────────
 
 fn send_json(req: Request, value: serde_json::Value) {
@@ -533,7 +728,45 @@ fn read_json_body<T: serde::de::DeserializeOwned>(req: &mut Request) -> Result<T
 
 #[cfg(test)]
 mod tests {
-    use super::parse_tasks;
+    use super::{apply_unique_edit, parse_tasks};
+
+    #[test]
+    fn edit_replaces_a_unique_match() {
+        let doc = "# Title\n\nHello world.\n";
+        assert_eq!(
+            apply_unique_edit(doc, "Hello world.", "Hello there.").unwrap(),
+            "# Title\n\nHello there.\n"
+        );
+    }
+
+    #[test]
+    fn edit_errors_when_find_is_missing() {
+        let err = apply_unique_edit("abc", "xyz", "q").unwrap_err();
+        assert!(err.contains("not found"), "got: {err}");
+    }
+
+    #[test]
+    fn edit_errors_when_find_is_not_unique() {
+        // "the" appears twice — must refuse rather than guess.
+        let err = apply_unique_edit("the cat sat on the mat", "the", "a").unwrap_err();
+        assert!(err.contains("not unique"), "got: {err}");
+        assert!(err.contains('2'), "should report the match count: {err}");
+    }
+
+    #[test]
+    fn edit_rejects_empty_find() {
+        assert!(apply_unique_edit("anything", "", "x").is_err());
+    }
+
+    #[test]
+    fn edit_replaces_only_the_first_when_unique() {
+        // A multi-line unique anchor replaced cleanly.
+        let doc = "line one\nUNIQUE ANCHOR\nline three";
+        assert_eq!(
+            apply_unique_edit(doc, "UNIQUE ANCHOR", "replaced").unwrap(),
+            "line one\nreplaced\nline three"
+        );
+    }
 
     /// Helper: extract (text, checked) pairs for terse assertions.
     fn pairs(content: &str) -> Vec<(String, bool)> {

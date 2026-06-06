@@ -38,6 +38,7 @@ pub fn run() {
         .manage(ipc::DocMirror::default())
         .manage(ipc::RecentMirror::default())
         .manage(ipc::ReviewState::default())
+        .manage(ipc::VaultMirror::default())
         .manage(afm::AfmState::default())
         .manage(activity::ActivityWatcher::default())
         .manage(embed::EmbedState::default())
@@ -55,6 +56,7 @@ pub fn run() {
             afm::afm_detect,
             afm::afm_generate,
             ipc::mcp_sync_state,
+            ipc::mcp_sync_vault,
             ipc::set_review_verdict,
             cli_install::install_cli,
             run::run_shell,
