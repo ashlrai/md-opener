@@ -64,7 +64,10 @@ func checkIsDefault(bundleURL: URL) -> Bool {
     // The macOS 26 SDK renamed the parameter label `toOpenContentType:` → `toOpen:`.
     // Compile against whichever label the build SDK exposes so this helper builds
     // on Xcode 15/16 (GitHub runners today) AND Xcode 26 — both run on macOS 12+.
-    #if compiler(>=6.2)
+    // The macOS 15 SDK (Xcode 16) renamed the label `toOpenContentType:` →
+    // `toOpen:`; gate on the Swift 6.0 compiler that ships with it so the helper
+    // builds on Xcode 15 (old label), 16, and 26 (new label) alike.
+    #if compiler(>=6.0)
     let currentDefault = ws.urlForApplication(toOpen: utType)
     #else
     let currentDefault = ws.urlForApplication(toOpenContentType: utType)
@@ -101,12 +104,12 @@ func setAsDefault(bundleURL: URL) {
 
         let box = ErrBox()
         let sema = DispatchSemaphore(value: 0)
-        // The macOS 26 SDK renamed the async `setDefaultApplication` parameter
-        // label `toOpenContentType:` → `toOpen:`. Both SDKs expose the
-        // async/throws form (macOS 12+); the pre-26 completion-handler overload
-        // was removed in the macOS 15 SDK (Xcode 16), so we use the async form on
-        // every Xcode and only switch the label at compile time.
-        #if compiler(>=6.2)
+        // The macOS 15 SDK (Xcode 16) renamed the async `setDefaultApplication`
+        // label `toOpenContentType:` → `toOpen:` and dropped the completion-
+        // handler overload, leaving only the async/throws form (macOS 12+). Use
+        // the async form everywhere; gate only the label on the Swift 6.0
+        // compiler that ships with the renaming SDK.
+        #if compiler(>=6.0)
         Task {
             do {
                 try await ws.setDefaultApplication(at: bundleURL, toOpen: utType)

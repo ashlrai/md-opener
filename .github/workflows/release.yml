@@ -213,7 +213,18 @@ jobs:
         env:
           APPLE_CERTIFICATE:          ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_ID:                   ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD:             ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID:              ${{ secrets.APPLE_TEAM_ID }}
         run: |
+          # Expose notarization creds to the build step ONLY when signing is
+          # configured. They must be ABSENT (not empty) for an unsigned build, or
+          # Tauri attempts notarization and fails on the empty Team ID.
+          {
+            echo "APPLE_ID=$APPLE_ID"
+            echo "APPLE_PASSWORD=$APPLE_PASSWORD"
+            echo "APPLE_TEAM_ID=$APPLE_TEAM_ID"
+          } >> "$GITHUB_ENV"
           KEYCHAIN_PATH="$RUNNER_TEMP/app-signing.keychain-db"
           KEYCHAIN_PASSWORD="$(openssl rand -hex 16)"
 
@@ -254,9 +265,10 @@ jobs:
           # still builds (unsigned/un-notarized) instead of failing codesign with
           # an empty identity. A real identity (when the secret is set) takes over.
           APPLE_SIGNING_IDENTITY:     ${{ secrets.APPLE_SIGNING_IDENTITY || '-' }}
-          APPLE_ID:                   ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD:             ${{ secrets.APPLE_PASSWORD }}
-          APPLE_TEAM_ID:              ${{ secrets.APPLE_TEAM_ID }}
+          # APPLE_ID / APPLE_PASSWORD / APPLE_TEAM_ID are intentionally NOT set
+          # here — the "Import Apple certificate" step injects them via $GITHUB_ENV
+          # only when a Developer ID is configured. Setting them to empty strings
+          # would make Tauri attempt (and fail) notarization on an unsigned build.
           # Tauri updater signing key (cross-platform — required on all legs)
           TAURI_SIGNING_PRIVATE_KEY:          ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
