@@ -49,20 +49,26 @@ export function Welcome() {
       </div>
       <h1>Ashlr MD</h1>
       <p>
-        A fast, beautiful home for your Markdown. Open a file to read or edit it — or
-        point Ashlr at a folder and watch your agent’s notes land live.
+        The home for your agent’s Markdown. Point Ashlr at a folder and every plan,
+        diff, and doc your AI agent writes shows up here — live.
       </p>
 
       <div className="welcome-actions">
-        <button className="btn-primary" type="button" onClick={() => pickAndOpen()}>
-          <OpenIcon />
-          Open a file
-        </button>
-        <button className="btn-secondary" type="button" onClick={() => openActivity()}>
+        <button className="btn-primary" type="button" onClick={() => openActivity()}>
           <WatchIcon />
           Watch a folder
         </button>
+        <button className="btn-secondary" type="button" onClick={() => pickAndOpen()}>
+          <OpenIcon />
+          Open a file
+        </button>
       </div>
+
+      <ul className="welcome-values" aria-label="What you can do">
+        <li>Read agent plans with live task progress</li>
+        <li>Catch new docs the moment your agent writes them</li>
+        <li>Ask on-device AI about any document — private by default</li>
+      </ul>
 
       {recents.length > 0 && (
         <div className="recents">

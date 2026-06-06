@@ -25,6 +25,9 @@ interface SettingsState {
   setTheme: (theme: ThemeId) => void;
   cycleTheme: () => void;
   setFontSize: (fontSize: number) => void;
+  /** Fire native OS notifications on real agent activity (default on). */
+  notificationsEnabled: boolean;
+  setNotificationsEnabled: (v: boolean) => void;
 
   /**
    * When (epoch ms) the default-handler prompt may show again.
@@ -58,6 +61,9 @@ export const useSettingsStore = create<SettingsState>()(
       },
       setFontSize: (fontSize) =>
         set({ fontSize: Math.min(24, Math.max(13, fontSize)) }),
+
+      notificationsEnabled: true,
+      setNotificationsEnabled: (notificationsEnabled) => set({ notificationsEnabled }),
 
       defaultPromptSnoozedUntil: null,
       snoozeDefaultPrompt: (days = 14) =>

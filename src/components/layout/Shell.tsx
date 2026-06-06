@@ -4,11 +4,13 @@ import "../../styles/split.css";
 import { linkScroll } from "../../lib/syncScroll";
 import { useDocumentStore } from "../../store/documentStore";
 import { useUiStore } from "../../store/uiStore";
+import { ActivationBanner } from "../ActivationBanner";
 import { ActivityDrawer } from "../ActivityDrawer";
 import { AISidebar } from "../ai/AISidebar";
 import { SelectionPopover } from "../ai/SelectionPopover";
 import { CommandPalette } from "../CommandPalette";
 import { DefaultHandlerBanner } from "../DefaultHandlerBanner";
+import { DigestCard } from "../DigestCard";
 import { MarkdownEditor } from "../editor/MarkdownEditor";
 import { SourceEditor } from "../editor/SourceEditor";
 import { ExportDialog } from "../export/ExportDialog";
@@ -102,6 +104,8 @@ export function Shell({ dragOver }: ShellProps) {
       <TabBar />
       {externalChange && <ExternalChangeBanner />}
       <DefaultHandlerBanner />
+      <ActivationBanner />
+      <DigestCard />
       {path && <Breadcrumb />}
       <main
         className={`app-content${scrolls ? "" : " no-scroll"}`}
