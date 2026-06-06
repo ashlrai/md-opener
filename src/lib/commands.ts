@@ -11,7 +11,6 @@
  * predicate for availability and a `shortcut` string if it should bind a key.
  */
 
-import { openSearchPanel } from "@codemirror/search";
 import { invoke } from "@tauri-apps/api/core";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { useActivityStore } from "../store/activityStore";
@@ -219,11 +218,12 @@ export function getCommands(): Command[] {
       keywords: ["find", "search", "locate", "highlight"],
       shortcut: "mod+f",
       when: hasDoc,
-      run: () => {
+      run: async () => {
         const mode = doc().viewMode;
         if (mode === "source") {
           const cm = getSourceView();
           if (cm) {
+            const { openSearchPanel } = await import("@codemirror/search");
             openSearchPanel(cm);
             cm.focus();
           }
@@ -248,9 +248,10 @@ export function getCommands(): Command[] {
       run: () => {
         // Replace is source-only; switch there, then open the panel once mounted.
         if (doc().viewMode !== "source") doc().setViewMode("source");
-        window.setTimeout(() => {
+        window.setTimeout(async () => {
           const cm = getSourceView();
           if (cm) {
+            const { openSearchPanel } = await import("@codemirror/search");
             openSearchPanel(cm);
             cm.focus();
           }

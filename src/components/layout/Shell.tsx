@@ -1,20 +1,16 @@
-import { useEffect, useRef } from "react";
+import { lazy, Suspense, useEffect, useRef } from "react";
 import "../../styles/ai.css";
 import "../../styles/split.css";
 import { linkScroll } from "../../lib/syncScroll";
+import { useAIStore } from "../../store/aiStore";
 import { useDocumentStore } from "../../store/documentStore";
 import { useUiStore } from "../../store/uiStore";
 import { ActivationBanner } from "../ActivationBanner";
 import { ActivityDrawer } from "../ActivityDrawer";
-import { AISidebar } from "../ai/AISidebar";
 import { SelectionPopover } from "../ai/SelectionPopover";
-import { CommandPalette } from "../CommandPalette";
 import { CanvasViewer } from "../canvas/CanvasViewer";
 import { DefaultHandlerBanner } from "../DefaultHandlerBanner";
 import { DigestCard } from "../DigestCard";
-import { MarkdownEditor } from "../editor/MarkdownEditor";
-import { SourceEditor } from "../editor/SourceEditor";
-import { ExportDialog } from "../export/ExportDialog";
 import { FindBar } from "../find/FindBar";
 import { Outline } from "../Outline";
 import { ReviewPanel } from "../review/ReviewPanel";
@@ -28,6 +24,25 @@ import { ExternalChangeBanner } from "./ExternalChangeBanner";
 import { StatusBar } from "./StatusBar";
 import { TabBar } from "./TabBar";
 import { TitleBar } from "./TitleBar";
+
+// Heavy editors — lazy-loaded so they split into their own on-demand chunks.
+const MarkdownEditor = lazy(() =>
+  import("../editor/MarkdownEditor").then((m) => ({ default: m.MarkdownEditor })),
+);
+const SourceEditor = lazy(() =>
+  import("../editor/SourceEditor").then((m) => ({ default: m.SourceEditor })),
+);
+
+// Heavy dialogs / sidebars — lazy-loaded; each gated on its open-state flag.
+const AISidebar = lazy(() =>
+  import("../ai/AISidebar").then((m) => ({ default: m.AISidebar })),
+);
+const CommandPalette = lazy(() =>
+  import("../CommandPalette").then((m) => ({ default: m.CommandPalette })),
+);
+const ExportDialog = lazy(() =>
+  import("../export/ExportDialog").then((m) => ({ default: m.ExportDialog })),
+);
 
 interface ShellProps {
   dragOver: boolean;
@@ -46,6 +61,8 @@ export function Shell({ dragOver }: ShellProps) {
   const exportOpen = useUiStore((s) => s.exportOpen);
   const settingsOpen = useUiStore((s) => s.settingsOpen);
   const findOpen = useUiStore((s) => s.findOpen);
+  const aiOpen = useAIStore((s) => s.open);
+  const commandPaletteOpen = useUiStore((s) => s.commandPaletteOpen);
   // The TabBar only renders with 2+ docs; when it does, the side docks must
   // start below it so they don't cover the leftmost/rightmost tabs.
   const hasTabs = useDocumentStore((s) => s.tabs.length >= 2);
@@ -127,11 +144,15 @@ export function Shell({ dragOver }: ShellProps) {
           splitView && viewMode !== "read" ? (
             <div className="split-view" ref={splitRef}>
               <div className="split-pane split-editor">
-                {viewMode === "source" ? (
-                  <SourceEditor key={docKey} initialContent={content} />
-                ) : (
-                  <MarkdownEditor key={docKey} initialContent={content} />
-                )}
+                <Suspense
+                  fallback={<div className="loading-state">Loading editor…</div>}
+                >
+                  {viewMode === "source" ? (
+                    <SourceEditor key={docKey} initialContent={content} />
+                  ) : (
+                    <MarkdownEditor key={docKey} initialContent={content} />
+                  )}
+                </Suspense>
               </div>
               <div className="split-pane split-preview" ref={previewRef}>
                 <article className="reading-surface">
@@ -140,9 +161,13 @@ export function Shell({ dragOver }: ShellProps) {
               </div>
             </div>
           ) : viewMode === "edit" ? (
-            <MarkdownEditor key={docKey} initialContent={content} />
+            <Suspense fallback={<div className="loading-state">Loading editor…</div>}>
+              <MarkdownEditor key={docKey} initialContent={content} />
+            </Suspense>
           ) : viewMode === "source" ? (
-            <SourceEditor key={docKey} initialContent={content} />
+            <Suspense fallback={<div className="loading-state">Loading editor…</div>}>
+              <SourceEditor key={docKey} initialContent={content} />
+            </Suspense>
           ) : (
             <article className="reading-surface">
               <Renderer content={content} />
@@ -157,11 +182,23 @@ export function Shell({ dragOver }: ShellProps) {
       <Outline />
       <SearchPanel />
       {findOpen && path && viewMode === "read" && !isCanvas && <FindBar />}
-      <AISidebar />
+      {aiOpen && (
+        <Suspense fallback={null}>
+          <AISidebar />
+        </Suspense>
+      )}
       <SelectionPopover />
-      {exportOpen && <ExportDialog />}
+      {exportOpen && (
+        <Suspense fallback={null}>
+          <ExportDialog />
+        </Suspense>
+      )}
       {settingsOpen && <SettingsPanel />}
-      <CommandPalette />
+      {commandPaletteOpen && (
+        <Suspense fallback={null}>
+          <CommandPalette />
+        </Suspense>
+      )}
       <ReviewPanel />
       <Toast />
     </div>

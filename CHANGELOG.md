@@ -3,6 +3,85 @@
 All notable changes to Ashlr MD are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.4.0] — Unreleased
+
+### Agent integration & human review
+- **One-click connect for your coding agent** — wire Ashlr MD into **Claude
+  Code**, **Cursor**, or **Codex** from **Preferences → AI agents (MCP)** without
+  touching a terminal. Each button runs the right setup (`claude mcp add`,
+  merges `~/.cursor/mcp.json`, or `codex mcp add`) and is enabled only for the
+  tools actually detected on your machine; for anything else, copy the exact
+  command.
+- **Auto-open everything your agent writes** — install the Claude Code
+  `PostToolUse` hook (`mdopen --hook`) and every Markdown file Claude writes or
+  edits pops into Ashlr MD for review. The hook is silent and always succeeds,
+  so it never disrupts your agent's tool flow.
+- **Stop-and-ask human review loop** — a new **blocking** `request_review` MCP
+  tool lets an agent surface a plan, diff, or finished doc and **wait for your
+  sign-off**. You **Approve**, **Request changes**, or **Dismiss** (with
+  comments) in the in-app review panel, and the verdict flows straight back to
+  the agent so it knows whether to proceed. Pairs naturally with
+  `present_document` for a full-screen read before you decide.
+
+### MCP server expansion
+- **A real MCP server, not just a launcher** — `mdopener-mcp` now negotiates the
+  protocol version (`2024-11-05` / `2025-03-26` / `2025-06-18`), and exposes
+  **resources** (`resources/list` + `resources/read`, scoped to your vault and
+  recents so it can't read arbitrary files), **prompts** (`summarize`,
+  `review_plan`, `improve_writing`, each embedding the live document), and a
+  full **tool** set.
+- **New tools for agent-driven editing** — `edit_document` (exact, unique
+  find/replace that refuses ambiguous or missing matches), `replace_document`
+  (whole-document swap), `search_vault` (full-text search across your watched
+  folder + recents), and `present_document` (open + switch to distraction-free
+  full-screen reading).
+- **Token-authenticated loopback IPC** — the server talks to the app over a
+  `127.0.0.1` HTTP channel guarded by a per-session 32-byte token; every
+  endpoint but a data-free health probe requires it, compared in constant time.
+
+### Obsidian compatibility
+- **Reads your Obsidian vault natively** — point Ashlr MD at any note and its
+  wikilinks, embeds, highlights, comments, and `.canvas` files render the way
+  Obsidian's Reading View shows them. No plugins, no export step.
+- **Vault-aware link resolution** — Ashlr MD auto-detects your vault root by
+  walking up to the nearest `.obsidian/` folder (or use a **Settings → Vault**
+  override), then resolves `[[wikilinks]]` **vault-wide** instead of only
+  relative to the current file — fixing links that previously broke when notes
+  lived in other folders. When several notes share a name, it picks the
+  **closest** match deterministically, so a link always resolves the same way.
+- **Full wikilink & transclusion grammar** — `[[note#heading]]` and
+  `[[#^block]]` anchors, partial transclusion of a single heading section
+  (`![[note#heading]]`) or block (`![[note#^block]]`), and image embeds with
+  sizing (`![[image.png|300]]`, `![[image.png|300x200]]`). Embedded images are
+  read through the Rust core into an inline `data:` URL (so the webview never
+  needs broad filesystem access), capped at 25 MiB each.
+- **Highlights & comments** — `==highlights==` render as `<mark>`, and inline
+  `%%comments%%` are hidden in the reading view, matching Obsidian. Markers
+  inside code are left as literal text.
+- **Round-trip & ask-your-vault** — **Open in Obsidian** hands the current note
+  back to Obsidian on that exact file (`obsidian://`), and library chat can be
+  grounded across your whole vault with source citations.
+- **A respectful guest** — saving is **refused** if it would land inside an
+  `.obsidian/` config folder; the guard checks the path textually *and* resolves
+  symlinks, so your settings, themes, and plugins are never touched.
+
+### Canvas
+- **Read-only JSON Canvas viewer** — open `.canvas` files and **pan** (drag),
+  **zoom** (scroll), and **Fit** to frame the board. `text`, `file` (Markdown
+  card or inline image), `link`, and `group` nodes all render, with edges drawn
+  as labelled, arrowed connectors using Obsidian's color presets. Read-only:
+  positions and the canvas file are never written back.
+
+### Security & docs
+- **Rewritten agent guide and new Obsidian guide** — `docs/AGENTS.md` documents
+  every tool, resource, prompt, the review loop, the auto-open hook, and the IPC
+  trust model; `docs/OBSIDIAN.md` covers the full compatibility surface and its
+  limits.
+- **Documented trust model + cross-stack hardening** — the local-only,
+  token-authenticated IPC design is spelled out, the `resources/read` channel is
+  scoped to advertised files, and a cross-stack security audit's fixes ship in
+  this release.
+
 ## [0.3.0] — 2026-06-05
 
 ### Default-app & reliability
@@ -89,6 +168,7 @@ callouts), WYSIWYG + source editing, PDF/DOCX/HTML export, local-first tiered
 AI, agent hand-off (`mdopen` CLI · `mdopener://` · MCP server), the macOS `.md`
 default handler, and smart agent-output rendering.
 
+[0.4.0]: https://github.com/ashlrai/ashlr-md/compare/v0.3.0...HEAD
 [0.3.0]: https://github.com/ashlrai/ashlr-md/releases/tag/v0.3.0
 [0.2.0]: https://github.com/ashlrai/ashlr-md/releases/tag/v0.2.0
 [0.1.0]: https://github.com/ashlrai/ashlr-md/releases/tag/v0.1.0

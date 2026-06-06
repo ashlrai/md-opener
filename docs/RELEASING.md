@@ -31,7 +31,13 @@ git push origin vX.Y.Z
 ```
 
 This triggers `.github/workflows/release.yml`, which fans out across the full
-build matrix and creates a **draft** GitHub Release.
+build matrix and **uploads each platform's bundles as workflow artifacts**.
+
+> **The workflow does NOT create the GitHub Release.** The org disables
+> `GITHUB_TOKEN` write access, so `release.yml` is build-only — it never calls
+> the Release API and never publishes `latest.json`. A maintainer assembles and
+> publishes the Release manually from the uploaded artifacts (see §4). Until
+> that manual step is done, **no release exists and the updater sees nothing.**
 
 > **Pre-release tags** — any tag containing a hyphen (`v0.2.0-beta.1`) sets
 > `prerelease: true` automatically. Use this for testing the pipeline without
@@ -70,15 +76,29 @@ entries for every platform — this is what `tauri-plugin-updater` polls.
 
 ---
 
-## 4. Publishing the GitHub Release
+## 4. Assembling & Publishing the GitHub Release
 
-1. Go to **github.com/ashlrai/ashlr-md/releases** and open the draft.
-2. Verify all expected artifacts are attached (see table above).
-3. Review the release notes; paste the relevant `CHANGELOG.md` section.
-4. Click **Publish release**.
+Because `release.yml` only uploads artifacts (see §2), you assemble the Release
+yourself with your own credentials:
 
-Publishing makes `latest.json` live — existing installs will prompt to update
-on next launch.
+1. Open the completed workflow run at **github.com/ashlrai/ashlr-md/actions**
+   and **download every leg's uploaded artifacts** (the `.dmg`/`.deb`/
+   `.AppImage`/`.exe`/`.msi` bundles, their `.sig` files, and each leg's updater
+   manifest fragment).
+2. **Assemble `latest.json`** by merging the per-platform updater entries from
+   every leg into one manifest (`version`, `pub_date`, and a `platforms` map of
+   `{ signature, url }` per target). The `url` of each entry must point at the
+   asset you upload in step 4.
+3. Create a new Release at **github.com/ashlrai/ashlr-md/releases/new** for the
+   `vX.Y.Z` tag (mark it pre-release for hyphenated tags). Paste the matching
+   `CHANGELOG.md` section as the notes.
+4. Attach all platform bundles **and** the assembled `latest.json` as release
+   assets, then **Publish**.
+
+Publishing makes `latest.json` live at the updater endpoint — existing installs
+prompt to update on next launch. (If you later automate this, a PAT with
+`contents:write` in the workflow would let `tauri-action` create the Release
+directly and this manual step goes away.)
 
 ---
 
@@ -185,7 +205,7 @@ git push
 
 | Secret | Used by | Required? |
 |---|---|---|
-| `GITHUB_TOKEN` | Release creation | Auto-provided |
+| `GITHUB_TOKEN` | Read-only (build/artifacts) — release is published manually, see §4 | Auto-provided |
 | `TAURI_SIGNING_PRIVATE_KEY` | Updater `.sig` files | Yes (all legs) |
 | `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | Updater `.sig` files | Yes (all legs) |
 | `APPLE_CERTIFICATE` | macOS code signing | Optional (unsigned DMG works) |
@@ -232,7 +252,7 @@ git commit -m "chore: regenerate app icons"
 - [ ] Version bump commit on `main`
 - [ ] Tag `vX.Y.Z` pushed — workflow fires
 - [ ] All four workflow legs green
-- [ ] GitHub Release draft reviewed and published
+- [ ] CI artifacts downloaded, `latest.json` assembled, Release published (§4)
 - [ ] Homebrew tap cask updated (version + sha256)
 - [ ] winget manifest PR submitted to `microsoft/winget-pkgs`
 - [ ] AUR PKGBUILD updated and pushed

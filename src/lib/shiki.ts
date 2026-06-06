@@ -6,7 +6,7 @@
  * variables on each token. markdown.css then picks the right variable for the
  * active app theme, so theme switching needs no re-highlight.
  */
-import { bundledLanguages, createHighlighter, type Highlighter } from "shiki";
+import type { Highlighter } from "shiki";
 
 const LIGHT_THEME = "github-light";
 const DARK_THEME = "github-dark";
@@ -30,10 +30,11 @@ let highlighterPromise: Promise<Highlighter> | null = null;
 
 function getHighlighter(): Promise<Highlighter> {
   if (!highlighterPromise) {
-    highlighterPromise = createHighlighter({
-      themes: [LIGHT_THEME, DARK_THEME],
-      langs: PRELOAD,
-    });
+    // Dynamic-import the engine so Shiki's core stays out of the first-paint
+    // chunk; it loads on the first code block that needs highlighting.
+    highlighterPromise = import("shiki").then(({ createHighlighter }) =>
+      createHighlighter({ themes: [LIGHT_THEME, DARK_THEME], langs: PRELOAD }),
+    );
   }
   return highlighterPromise;
 }
@@ -64,6 +65,7 @@ export async function highlightCode(
   const lang = normalizeLang(rawLang);
 
   if (!hl.getLoadedLanguages().includes(lang)) {
+    const { bundledLanguages } = await import("shiki");
     if (lang in bundledLanguages) {
       try {
         await hl.loadLanguage(lang as keyof typeof bundledLanguages);

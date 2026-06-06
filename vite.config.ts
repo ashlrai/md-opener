@@ -24,6 +24,50 @@ export default defineConfig(async () => ({
     ],
   },
 
+  build: {
+    chunkSizeWarningLimit: 700,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes("@milkdown") || id.includes("prosemirror")) {
+            return "editor-milkdown";
+          }
+          if (id.includes("@codemirror") || id.includes("@lezer")) {
+            return "editor-codemirror";
+          }
+          // NOTE: do NOT manualChunk shiki — it already dynamic-imports each
+          // language grammar as its own chunk, so a doc only pulls the grammars
+          // for the languages it actually uses. Lumping all of shiki into one
+          // chunk would force every code block to load the entire ~9.5 MB
+          // grammar set. Shiki's own dynamic imports keep this optimal.
+          if (id.includes("katex")) {
+            return "katex";
+          }
+          if (id.includes("mermaid")) {
+            return "mermaid";
+          }
+          if (id.includes("html-to-docx")) {
+            return "docx";
+          }
+          if (
+            id.includes("react-markdown") ||
+            id.includes("remark") ||
+            id.includes("rehype") ||
+            id.includes("micromark") ||
+            id.includes("mdast") ||
+            id.includes("unist") ||
+            id.includes("hast")
+          ) {
+            return "markdown-core";
+          }
+          if (id.includes("react-dom")) {
+            return "react";
+          }
+        },
+      },
+    },
+  },
+
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
   //
   // 1. prevent Vite from obscuring rust errors
