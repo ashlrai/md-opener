@@ -30,9 +30,7 @@ const FOCUSABLE_SELECTOR = [
 ].join(",");
 
 function getFocusable(container: HTMLElement): HTMLElement[] {
-  return Array.from(
-    container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR),
-  ).filter(
+  return Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).filter(
     // Skip elements hidden from layout (display:none / visibility:hidden give
     // a zero-size client rect).
     (el) => el.offsetWidth > 0 || el.offsetHeight > 0 || el === document.activeElement,
