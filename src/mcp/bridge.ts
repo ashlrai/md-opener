@@ -37,6 +37,7 @@ import { useRecentStore } from "../store/recentStore";
 import { useReviewStore } from "../store/reviewStore";
 import { toast } from "../store/toastStore";
 import { useUiStore } from "../store/uiStore";
+import { applyUniqueEdit } from "./applyEdit";
 
 // ── Payload shapes from Rust ──────────────────────────────────────────────────
 
@@ -64,6 +65,13 @@ interface ReviewPayload {
 
 interface PresentPayload {
   path: string | null;
+}
+
+interface EditPayload {
+  editId: string;
+  find: string;
+  replace: string;
+  save?: boolean;
 }
 
 // ── Hook ──────────────────────────────────────────────────────────────────────
@@ -156,6 +164,49 @@ export function useMcpBridge(): void {
         // Re-sync immediately after mutation so a subsequent /content read
         // sees the updated content without waiting for the debounce.
         syncNow();
+      }),
+    );
+
+    // mcp://edit — apply an exact, unique find/replace against the LIVE document.
+    //
+    // This is the frontend half of the MCP `/edit` round-trip. The Rust IPC
+    // worker parks waiting for our reply (mcp_edit_result), so we ALWAYS answer —
+    // success, soft-failure, or thrown error — keyed by editId. Applying the
+    // find/replace here (against documentStore's current content, not the
+    // 200 ms-debounced server mirror) is what closes the stale-window: we both
+    // find text the user typed in the last debounce and derive the new content
+    // from that live basis, so the result can't clobber just-typed edits.
+    unlisteners.push(
+      listen<EditPayload>("mcp://edit", async (e) => {
+        const { editId, find, replace, save } = e.payload;
+        try {
+          const liveContent = useDocumentStore.getState().content;
+          const outcome = applyUniqueEdit(liveContent, find, replace);
+          if (outcome.ok && outcome.content !== undefined) {
+            useDocumentStore.getState().setContent(outcome.content);
+            if (save) {
+              await useDocumentStore.getState().save();
+            }
+            // Keep the server mirror fresh immediately (don't wait for debounce)
+            // so a subsequent /content read reflects the edit.
+            syncNow();
+          }
+          await invoke("mcp_edit_result", {
+            editId,
+            ok: outcome.ok,
+            replaced: outcome.replaced,
+            error: outcome.error ?? null,
+          });
+        } catch (err) {
+          // Never leave the Rust worker parked — report the failure so it can
+          // return a soft error to the agent instead of timing out.
+          await invoke("mcp_edit_result", {
+            editId,
+            ok: false,
+            replaced: 0,
+            error: `Edit failed in app: ${String(err)}`,
+          }).catch(() => {});
+        }
       }),
     );
 
