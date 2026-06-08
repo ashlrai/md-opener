@@ -339,6 +339,32 @@ fn base64_encode(input: &[u8]) -> String {
     out
 }
 
+/// Apply a single exact find→replace to a file on disk, using the same
+/// unique-match semantics as the MCP `/edit` endpoint (0 matches → error,
+/// >1 matches → ambiguous error, 1 match → write atomically).
+///
+/// Rejects paths inside `.obsidian/` config folders and non-Markdown binary
+/// files for the same reasons as `write_markdown_file`.
+#[tauri::command]
+pub fn apply_file_patch(path: String, find: String, replace: String) -> Result<(), String> {
+    if path_targets_obsidian_dir(&path) {
+        return Err("Refusing to patch inside an Obsidian .obsidian/ config folder.".into());
+    }
+    if find.is_empty() {
+        return Err("`find` must not be empty.".into());
+    }
+    let content =
+        std::fs::read_to_string(&path).map_err(|e| format!("Could not read {path}: {e}"))?;
+    let new_content = match content.matches(find.as_str()).count() {
+        0 => return Err("`find` string not found in the file.".into()),
+        1 => content.replacen(find.as_str(), replace.as_str(), 1),
+        n => return Err(format!(
+            "`find` string is not unique ({n} matches) — include more surrounding context to disambiguate."
+        )),
+    };
+    write_markdown_file(path, new_content)
+}
+
 /// Open the given file in Obsidian via the `obsidian://open?path=…` URI scheme.
 #[tauri::command]
 pub fn open_in_obsidian(app: tauri::AppHandle, path: String) -> Result<(), String> {
