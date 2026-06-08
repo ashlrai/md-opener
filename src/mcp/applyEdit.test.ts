@@ -1,0 +1,133 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+// Mock the Tauri bridge so documentStore runs in plain happy-dom.
+const invokeMock = vi.fn((..._args: unknown[]) => Promise.resolve());
+vi.mock("@tauri-apps/api/core", () => ({
+  invoke: (...args: unknown[]) => invokeMock(...args),
+}));
+vi.mock("../store/recentStore", () => ({
+  useRecentStore: { getState: () => ({ add: vi.fn() }) },
+}));
+
+import { useDocumentStore } from "../store/documentStore";
+import { applyUniqueEdit } from "./applyEdit";
+
+describe("applyUniqueEdit — exact, unique find/replace contract", () => {
+  // These mirror the Rust `apply_unique_edit` unit tests one-for-one so the two
+  // implementations stay in lockstep.
+  it("replaces a unique match", () => {
+    const r = applyUniqueEdit(
+      "# Title\n\nHello world.\n",
+      "Hello world.",
+      "Hello there.",
+    );
+    expect(r.ok).toBe(true);
+    expect(r.replaced).toBe(1);
+    expect(r.content).toBe("# Title\n\nHello there.\n");
+  });
+
+  it("errors when find is missing", () => {
+    const r = applyUniqueEdit("abc", "xyz", "q");
+    expect(r.ok).toBe(false);
+    expect(r.replaced).toBe(0);
+    expect(r.error).toMatch(/not found/);
+  });
+
+  it("errors when find is not unique and reports the count", () => {
+    const r = applyUniqueEdit("the cat sat on the mat", "the", "a");
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/not unique/);
+    expect(r.error).toMatch(/2/);
+  });
+
+  it("rejects an empty find", () => {
+    const r = applyUniqueEdit("anything", "", "x");
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/must not be empty/);
+  });
+
+  it("replaces only the single unique multi-line anchor", () => {
+    const r = applyUniqueEdit(
+      "line one\nUNIQUE ANCHOR\nline three",
+      "UNIQUE ANCHOR",
+      "replaced",
+    );
+    expect(r.ok).toBe(true);
+    expect(r.content).toBe("line one\nreplaced\nline three");
+  });
+
+  it("counts non-overlapping matches like Rust str::matches", () => {
+    // "aa" in "aaaa" is 2 non-overlapping matches → not unique.
+    const r = applyUniqueEdit("aaaa", "aa", "b");
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/not unique/);
+    expect(r.error).toMatch(/2/);
+  });
+});
+
+/**
+ * Reproduce the bug's core: the server-side mirror is 200 ms-debounced, so right
+ * after the user types it is STALE. The fix applies the edit against the LIVE
+ * documentStore content. These tests simulate the bridge's `mcp://edit` handler
+ * logic (read live content → applyUniqueEdit → setContent) and assert the edit
+ * lands on the live text and does NOT clobber the user's just-typed edits.
+ */
+describe("mcp://edit applies against the LIVE document, not a stale mirror", () => {
+  beforeEach(() => {
+    useDocumentStore.setState({
+      path: "/a.md",
+      fileName: "a.md",
+      content: "",
+      diskContent: "",
+      isDirty: false,
+      tabs: [],
+      activeId: null,
+    });
+    invokeMock.mockClear();
+  });
+
+  /** The exact logic the bridge runs for an mcp://edit event. */
+  function handleEdit(find: string, replace: string) {
+    const live = useDocumentStore.getState().content;
+    const outcome = applyUniqueEdit(live, find, replace);
+    if (outcome.ok && outcome.content !== undefined) {
+      useDocumentStore.getState().setContent(outcome.content);
+    }
+    return outcome;
+  }
+
+  it("edits text the user typed AFTER the last debounced sync (stale-window closed)", () => {
+    // Imagine the server mirror was last synced when the doc was "draft".
+    const staleMirror = "draft";
+    // The user then types more; the LIVE store now holds the newer text, but the
+    // 200 ms debounce hasn't fired so `staleMirror` is what the OLD code saw.
+    useDocumentStore.getState().setContent("draft — just typed this sentence.");
+
+    // Old behavior: applying against the stale mirror can't find the new text.
+    expect(applyUniqueEdit(staleMirror, "just typed this sentence.", "edited").ok).toBe(
+      false,
+    );
+
+    // New behavior: the bridge applies against LIVE content and succeeds.
+    const outcome = handleEdit("just typed this sentence.", "edited by agent");
+    expect(outcome.ok).toBe(true);
+    expect(useDocumentStore.getState().content).toBe("draft — edited by agent");
+  });
+
+  it("does not clobber the user's just-typed edits (no full stale-content overwrite)", () => {
+    // User's live doc carries fresh content the stale mirror never saw.
+    useDocumentStore
+      .getState()
+      .setContent("Intro paragraph.\n\nTYPO heer.\n\nMore fresh text.");
+
+    handleEdit("TYPO heer.", "Fixed here.");
+
+    const result = useDocumentStore.getState().content;
+    // The targeted fix applied…
+    expect(result).toBe("Intro paragraph.\n\nFixed here.\n\nMore fresh text.");
+    // …and the user's surrounding fresh text survived (would be lost if a stale
+    // full-document snapshot had been pushed back).
+    expect(result).toContain("Intro paragraph.");
+    expect(result).toContain("More fresh text.");
+  });
+});

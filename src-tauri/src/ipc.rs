@@ -16,19 +16,29 @@
 //! | POST   | /export    | `{"format":"pdf|docx|html","outputPath":"…|null"}` | Trigger export |
 //! | GET    | /vault     | —                                     | Watched-folder files + recents     |
 //! | GET    | /search    | `?q=…&limit=N`                        | Full-text search across the vault  |
-//! | POST   | /edit      | `{"find":"…","replace":"…","save":bool}` | Exact find/replace on live doc  |
+//! | POST   | /edit      | `{"find":"…","replace":"…","save":bool}` | Exact find/replace on LIVE doc (round-trip) |
 //! | POST   | /present   | `{"path":"…|null"}`                   | Open + distraction-free reading    |
 //!
 //! Auth: every endpoint except `/health` requires `Authorization: Bearer <token>`
 //! (the per-session token in `~/.mdopener/ipc-token`).
 //!
 //! Content is kept in [`DocMirror`], a managed Tauri state struct that the
-//! frontend syncs via `mcp_sync_state` on every document change.  Mutations
-//! (`/content`, `/open`, `/export`) store a pending request in [`PendingIpc`]
-//! and emit a Tauri event; the frontend picks it up, applies it, and (for
-//! `/content`) calls `mcp_sync_state` again to confirm the round-trip.
+//! frontend syncs via `mcp_sync_state` on every document change (debounced
+//! 200 ms). Mutations (`/content`, `/open`, `/export`) emit a Tauri event the
+//! frontend picks up and applies.
+//!
+//! `/edit` is special: because the 200 ms debounce makes [`DocMirror`] stale
+//! right after the user types, applying a find/replace against it could miss
+//! live text or clobber just-typed edits. So `/edit` is a synchronous ROUND-TRIP
+//! — it emits `mcp://edit`, parks the worker thread on a [`PendingEdits`] oneshot,
+//! and the frontend applies the find/replace against its LIVE `documentStore`
+//! content and reports the outcome back via the `mcp_edit_result` command.
 
+use std::collections::HashMap;
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
+use std::sync::mpsc;
 use std::sync::Mutex;
+use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager};
@@ -93,6 +103,29 @@ pub struct VaultInner {
 #[derive(Default)]
 pub struct VaultMirror(pub Mutex<VaultInner>);
 
+/// The outcome of a frontend-applied `/edit`, reported back by the
+/// `mcp_edit_result` command and forwarded to the waiting IPC worker thread.
+pub struct EditOutcome {
+    /// True when the find/replace was applied (exactly one match).
+    pub ok: bool,
+    /// Number of replacements made (1 on success, 0 on failure).
+    pub replaced: u32,
+    /// Human-readable reason when `ok` is false (not found / not unique / no doc).
+    pub error: Option<String>,
+}
+
+/// In-flight `/edit` round-trips, keyed by a per-request `editId`. The IPC worker
+/// thread parks on the receiver half; the frontend answers via `mcp_edit_result`,
+/// which sends the [`EditOutcome`] through the matching sender.
+///
+/// WHY a round-trip: the find/replace must run against the LIVE document the user
+/// is editing, not the 200 ms-debounced [`DocMirror`]. Computing it on the
+/// frontend (against `documentStore`'s current content) both (a) sees text the
+/// user typed in the last debounce window and (b) derives the new content from
+/// that live basis, so applying it can never clobber the user's just-typed edits.
+#[derive(Default)]
+pub struct PendingEdits(pub Mutex<HashMap<String, mpsc::Sender<EditOutcome>>>);
+
 fn now_ms() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -151,6 +184,26 @@ pub fn mcp_sync_vault(
     vault: tauri::State<VaultMirror>,
 ) {
     *vault.0.lock().unwrap() = VaultInner { watched_dir, files };
+}
+
+/// Called by the frontend after it applies an `mcp://edit` against the LIVE
+/// document. Forwards the outcome to the IPC worker thread parked in
+/// `handle_edit`. Removing the sender from [`PendingEdits`] here means a stray or
+/// duplicate reply for an already-resolved (or timed-out) edit is silently
+/// ignored rather than panicking on a dropped receiver.
+#[tauri::command]
+pub fn mcp_edit_result(
+    edit_id: String,
+    ok: bool,
+    replaced: u32,
+    error: Option<String>,
+    pending: tauri::State<PendingEdits>,
+) {
+    let tx = pending.0.lock().unwrap().remove(&edit_id);
+    if let Some(tx) = tx {
+        // The receiver may already be gone if handle_edit timed out; ignore.
+        let _ = tx.send(EditOutcome { ok, replaced, error });
+    }
 }
 
 // ── IPC port file helpers ─────────────────────────────────────────────────────
@@ -633,6 +686,13 @@ fn handle_search(req: Request, query: &str, app: &AppHandle) {
 /// Apply a single exact find→replace, requiring the `find` string to appear
 /// EXACTLY once. Returns the new content, or a human-readable error explaining
 /// why the edit could not be applied unambiguously.
+///
+/// NOTE: the production `/edit` path now applies this on the FRONTEND (against the
+/// live document — see `applyUniqueEdit` in `src/mcp/applyEdit.ts`, which mirrors
+/// this exact 0/1/>1-match contract). This reference implementation is retained
+/// as the canonical spec and is exercised by the unit tests below to lock the
+/// contract the TS port must uphold.
+#[cfg_attr(not(test), allow(dead_code))]
 fn apply_unique_edit(content: &str, find: &str, replace: &str) -> Result<String, String> {
     if find.is_empty() {
         return Err("`find` must not be empty.".into());
@@ -646,9 +706,59 @@ fn apply_unique_edit(content: &str, find: &str, replace: &str) -> Result<String,
     }
 }
 
-/// POST /edit — exact-string find/replace on the live document. Soft failures
-/// (not found / not unique) come back as 200 `{"ok":false,"error":…}` so the
-/// agent sees the reason rather than an opaque HTTP error.
+/// How long the IPC worker thread parks waiting for the frontend to apply an
+/// edit and report back via `mcp_edit_result`. Generous: the frontend work
+/// (find/replace, `setContent`, and an optional save) is sub-millisecond, but the
+/// app may be briefly busy. A timeout still bounds the worker so a wedged or
+/// missing frontend can't pin it forever — the 3 other workers stay free anyway.
+const EDIT_ROUNDTRIP_TIMEOUT: Duration = Duration::from_secs(5);
+
+/// Process-monotonic sequence for unique edit ids. The [`PendingEdits`] map is
+/// per-process, so a plain counter is collision-free — unlike a millisecond
+/// timestamp, which two back-to-back edits in the same clock ms can share (which
+/// would overwrite one sender and make both round-trips spuriously time out).
+static EDIT_SEQ: AtomicU64 = AtomicU64::new(0);
+
+/// Cap on edit round-trips parked on worker threads at once. With `WORKERS = 4`,
+/// holding this to 2 guarantees at least one worker stays free for `/content`,
+/// `/review/result` and `/health` even when a review poll is also parked.
+const MAX_INFLIGHT_EDITS: usize = 2;
+static INFLIGHT_EDITS: AtomicUsize = AtomicUsize::new(0);
+
+/// RAII admission guard: lets at most [`MAX_INFLIGHT_EDITS`] edit round-trips run
+/// concurrently and releases the slot on every return path (success, soft-fail,
+/// timeout) via `Drop`.
+struct InflightEdit;
+impl InflightEdit {
+    fn acquire() -> Option<Self> {
+        if INFLIGHT_EDITS.fetch_add(1, Ordering::AcqRel) >= MAX_INFLIGHT_EDITS {
+            INFLIGHT_EDITS.fetch_sub(1, Ordering::AcqRel);
+            None
+        } else {
+            Some(InflightEdit)
+        }
+    }
+}
+impl Drop for InflightEdit {
+    fn drop(&mut self) {
+        INFLIGHT_EDITS.fetch_sub(1, Ordering::AcqRel);
+    }
+}
+
+/// POST /edit — exact-string find/replace on the LIVE document.
+///
+/// The find/replace is applied on the FRONTEND, against `documentStore`'s current
+/// content (never the 200 ms-debounced [`DocMirror`]). This both finds text the
+/// user typed within the last debounce window and derives the new content from
+/// that live basis, so the result can't clobber the user's just-typed edits.
+///
+/// Mechanics: register a oneshot in [`PendingEdits`], emit `mcp://edit`, then park
+/// this worker thread on the receiver. The frontend's `mcp_edit_result` command
+/// fulfils it with the match outcome, which we relay to the HTTP caller.
+///
+/// Soft failures (not found / not unique / no document open) come back as 200
+/// `{"ok":false,"error":…}` so the agent sees the reason rather than an opaque
+/// HTTP error — identical to the prior contract.
 fn handle_edit(mut req: Request, app: &AppHandle) {
     #[derive(Deserialize)]
     struct Body {
@@ -663,15 +773,24 @@ fn handle_edit(mut req: Request, app: &AppHandle) {
         Err(e) => return send_error(req, 400, &e),
     };
 
-    let mirror = app.state::<DocMirror>().0.lock().unwrap().clone();
+    // Guard the cheap, server-knowable failures up front so we don't bother the
+    // frontend (or burn a round-trip) on them. An empty `find` is always invalid;
+    // this also matches `apply_unique_edit`'s contract exactly.
+    if body.find.is_empty() {
+        return send_json(req, serde_json::json!({
+            "ok": false,
+            "error": "`find` must not be empty.",
+        }));
+    }
 
-    // Edits act on the live document. If the caller named a path, make sure it
-    // matches the open doc so they don't silently edit the wrong file. Compare
-    // canonical paths only when BOTH resolve (e.g. both exist on disk); if either
-    // can't be canonicalized, fall back to a raw string compare on both sides so
-    // the two legs are always normalized the same way.
+    // If the caller named a path, make sure it matches the open doc so they don't
+    // silently edit the wrong file. The open path only changes on open/tab-switch
+    // (not mid-keystroke), so the mirrored path isn't subject to the typing race
+    // that the *content* is — checking it here is safe. Compare canonical paths
+    // only when BOTH resolve; otherwise fall back to a raw string compare on both
+    // sides so the two legs are always normalized the same way.
     if let Some(ref p) = body.path {
-        let have_raw = mirror.path.clone().unwrap_or_default();
+        let have_raw = app.state::<DocMirror>().0.lock().unwrap().path.clone().unwrap_or_default();
         let want_canon = std::fs::canonicalize(p).ok();
         let have_canon = std::fs::canonicalize(&have_raw).ok();
         let matches = match (want_canon, have_canon) {
@@ -686,15 +805,55 @@ fn handle_edit(mut req: Request, app: &AppHandle) {
         }
     }
 
-    match apply_unique_edit(&mirror.content, &body.find, &body.replace) {
-        Ok(new_content) => {
-            let _ = app.emit("mcp://set-content", serde_json::json!({
-                "content": new_content,
-                "save": body.save,
+    // Bound concurrent edit round-trips so they can't park every worker thread
+    // and starve the fast endpoints (/content, /review/result, /health). Excess
+    // edits soft-fail immediately so the agent can retry, rather than the whole
+    // IPC server appearing wedged. The guard releases its slot on every path.
+    let _inflight = match InflightEdit::acquire() {
+        Some(g) => g,
+        None => {
+            return send_json(req, serde_json::json!({
+                "ok": false,
+                "error": "The editor is busy applying another edit — retry in a moment.",
             }));
-            send_json(req, serde_json::json!({ "ok": true, "replaced": 1 }));
         }
-        Err(e) => send_json(req, serde_json::json!({ "ok": false, "error": e })),
+    };
+
+    // Register a oneshot keyed by a unique editId, then ask the frontend to apply
+    // the edit against its live content.
+    let edit_id = format!("edit_{}", EDIT_SEQ.fetch_add(1, Ordering::Relaxed));
+    let (tx, rx) = mpsc::channel::<EditOutcome>();
+    {
+        let pending = app.state::<PendingEdits>();
+        pending.0.lock().unwrap().insert(edit_id.clone(), tx);
+    }
+    let _ = app.emit("mcp://edit", serde_json::json!({
+        "editId": edit_id,
+        "find": body.find,
+        "replace": body.replace,
+        "save": body.save,
+    }));
+
+    // Park until the frontend reports back, or give up after the timeout. On
+    // timeout (or a closed channel) drop the pending entry so a late reply is a
+    // no-op rather than leaking the sender.
+    match rx.recv_timeout(EDIT_ROUNDTRIP_TIMEOUT) {
+        Ok(outcome) if outcome.ok => {
+            send_json(req, serde_json::json!({ "ok": true, "replaced": outcome.replaced }));
+        }
+        Ok(outcome) => {
+            let msg = outcome
+                .error
+                .unwrap_or_else(|| "Edit could not be applied.".into());
+            send_json(req, serde_json::json!({ "ok": false, "error": msg }));
+        }
+        Err(_) => {
+            app.state::<PendingEdits>().0.lock().unwrap().remove(&edit_id);
+            send_json(req, serde_json::json!({
+                "ok": false,
+                "error": "Timed out waiting for the app to apply the edit — is a document open and the window responsive?",
+            }));
+        }
     }
 }
 
@@ -755,7 +914,35 @@ fn read_json_body<T: serde::de::DeserializeOwned>(req: &mut Request) -> Result<T
 
 #[cfg(test)]
 mod tests {
-    use super::{apply_unique_edit, parse_tasks};
+    use super::{apply_unique_edit, parse_tasks, InflightEdit, INFLIGHT_EDITS, MAX_INFLIGHT_EDITS};
+    use std::sync::atomic::Ordering;
+
+    #[test]
+    fn inflight_edit_guard_caps_concurrency() {
+        // Admits up to the cap, refuses beyond it, and frees a slot on Drop so a
+        // burst of /edit requests can never park every worker thread.
+        let mut guards: Vec<InflightEdit> = Vec::new();
+        for _ in 0..MAX_INFLIGHT_EDITS {
+            let g = InflightEdit::acquire();
+            assert!(g.is_some(), "should admit up to the cap");
+            guards.push(g.unwrap());
+        }
+        assert!(
+            InflightEdit::acquire().is_none(),
+            "should refuse a round-trip beyond the cap"
+        );
+        // Freeing one slot makes room for exactly one more.
+        guards.pop();
+        let extra = InflightEdit::acquire();
+        assert!(extra.is_some(), "a freed slot is reusable");
+        drop(extra);
+        drop(guards);
+        assert_eq!(
+            INFLIGHT_EDITS.load(Ordering::Acquire),
+            0,
+            "every slot is released once guards drop"
+        );
+    }
 
     #[test]
     fn edit_replaces_a_unique_match() {
