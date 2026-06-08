@@ -205,7 +205,12 @@ export function useMcpBridge(): void {
             ok: false,
             replaced: 0,
             error: `Edit failed in app: ${String(err)}`,
-          }).catch(() => {});
+          }).catch((e2) => {
+            // The recovery reply itself failed (e.g. IPC torn down mid-reload):
+            // the worker can no longer be released early and will hit its 5 s
+            // timeout. Surface it so the stall isn't completely silent.
+            console.error("[mcp bridge] mcp_edit_result recovery reply failed:", e2);
+          });
         }
       }),
     );

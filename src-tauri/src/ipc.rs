@@ -35,6 +35,7 @@
 //! content and reports the outcome back via the `mcp_edit_result` command.
 
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::mpsc;
 use std::sync::Mutex;
 use std::time::Duration;
@@ -712,6 +713,38 @@ fn apply_unique_edit(content: &str, find: &str, replace: &str) -> Result<String,
 /// missing frontend can't pin it forever — the 3 other workers stay free anyway.
 const EDIT_ROUNDTRIP_TIMEOUT: Duration = Duration::from_secs(5);
 
+/// Process-monotonic sequence for unique edit ids. The [`PendingEdits`] map is
+/// per-process, so a plain counter is collision-free — unlike a millisecond
+/// timestamp, which two back-to-back edits in the same clock ms can share (which
+/// would overwrite one sender and make both round-trips spuriously time out).
+static EDIT_SEQ: AtomicU64 = AtomicU64::new(0);
+
+/// Cap on edit round-trips parked on worker threads at once. With `WORKERS = 4`,
+/// holding this to 2 guarantees at least one worker stays free for `/content`,
+/// `/review/result` and `/health` even when a review poll is also parked.
+const MAX_INFLIGHT_EDITS: usize = 2;
+static INFLIGHT_EDITS: AtomicUsize = AtomicUsize::new(0);
+
+/// RAII admission guard: lets at most [`MAX_INFLIGHT_EDITS`] edit round-trips run
+/// concurrently and releases the slot on every return path (success, soft-fail,
+/// timeout) via `Drop`.
+struct InflightEdit;
+impl InflightEdit {
+    fn acquire() -> Option<Self> {
+        if INFLIGHT_EDITS.fetch_add(1, Ordering::AcqRel) >= MAX_INFLIGHT_EDITS {
+            INFLIGHT_EDITS.fetch_sub(1, Ordering::AcqRel);
+            None
+        } else {
+            Some(InflightEdit)
+        }
+    }
+}
+impl Drop for InflightEdit {
+    fn drop(&mut self) {
+        INFLIGHT_EDITS.fetch_sub(1, Ordering::AcqRel);
+    }
+}
+
 /// POST /edit — exact-string find/replace on the LIVE document.
 ///
 /// The find/replace is applied on the FRONTEND, against `documentStore`'s current
@@ -772,9 +805,23 @@ fn handle_edit(mut req: Request, app: &AppHandle) {
         }
     }
 
+    // Bound concurrent edit round-trips so they can't park every worker thread
+    // and starve the fast endpoints (/content, /review/result, /health). Excess
+    // edits soft-fail immediately so the agent can retry, rather than the whole
+    // IPC server appearing wedged. The guard releases its slot on every path.
+    let _inflight = match InflightEdit::acquire() {
+        Some(g) => g,
+        None => {
+            return send_json(req, serde_json::json!({
+                "ok": false,
+                "error": "The editor is busy applying another edit — retry in a moment.",
+            }));
+        }
+    };
+
     // Register a oneshot keyed by a unique editId, then ask the frontend to apply
     // the edit against its live content.
-    let edit_id = format!("edit_{}_{:08x}", now_ms(), std::process::id());
+    let edit_id = format!("edit_{}", EDIT_SEQ.fetch_add(1, Ordering::Relaxed));
     let (tx, rx) = mpsc::channel::<EditOutcome>();
     {
         let pending = app.state::<PendingEdits>();
@@ -867,7 +914,35 @@ fn read_json_body<T: serde::de::DeserializeOwned>(req: &mut Request) -> Result<T
 
 #[cfg(test)]
 mod tests {
-    use super::{apply_unique_edit, parse_tasks};
+    use super::{apply_unique_edit, parse_tasks, InflightEdit, INFLIGHT_EDITS, MAX_INFLIGHT_EDITS};
+    use std::sync::atomic::Ordering;
+
+    #[test]
+    fn inflight_edit_guard_caps_concurrency() {
+        // Admits up to the cap, refuses beyond it, and frees a slot on Drop so a
+        // burst of /edit requests can never park every worker thread.
+        let mut guards: Vec<InflightEdit> = Vec::new();
+        for _ in 0..MAX_INFLIGHT_EDITS {
+            let g = InflightEdit::acquire();
+            assert!(g.is_some(), "should admit up to the cap");
+            guards.push(g.unwrap());
+        }
+        assert!(
+            InflightEdit::acquire().is_none(),
+            "should refuse a round-trip beyond the cap"
+        );
+        // Freeing one slot makes room for exactly one more.
+        guards.pop();
+        let extra = InflightEdit::acquire();
+        assert!(extra.is_some(), "a freed slot is reusable");
+        drop(extra);
+        drop(guards);
+        assert_eq!(
+            INFLIGHT_EDITS.load(Ordering::Acquire),
+            0,
+            "every slot is released once guards drop"
+        );
+    }
 
     #[test]
     fn edit_replaces_a_unique_match() {
