@@ -13,7 +13,7 @@
  */
 
 import { invoke } from "@tauri-apps/api/core";
-import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useId, useMemo, useRef, useState } from "react";
 import {
   type CanvasBounds,
   type CanvasEdge,
@@ -27,7 +27,7 @@ import {
   resolveCanvasColor,
   type ViewTransform,
 } from "../../lib/canvas";
-import { isImageTarget } from "../../lib/transclude";
+import { extractSection, isImageTarget } from "../../lib/transclude";
 import { resolveWikilink } from "../../lib/wikilink";
 import { useDocumentStore } from "../../store/documentStore";
 import { Renderer } from "../viewer/Renderer";
@@ -220,6 +220,11 @@ function CanvasEdges({
     })
     .filter((x): x is NonNullable<typeof x> => x !== null);
 
+  // Per-instance marker id — a hardcoded global id would collide when two
+  // canvases render at once (split view / tab switch), making one canvas's
+  // arrowheads resolve to the other's marker. useId() is unique per component.
+  const markerId = `canvas-arrow-${useId().replace(/:/g, "")}`;
+
   if (drawn.length === 0) return null;
 
   // Give the SVG a real (non-zero) viewport at the world's bounding box —
@@ -240,7 +245,7 @@ function CanvasEdges({
       <g transform={`translate(${-bounds.minX}, ${-bounds.minY})`}>
         <defs>
           <marker
-            id="canvas-arrow"
+            id={markerId}
             viewBox="0 0 10 10"
             refX="8"
             refY="5"
@@ -268,8 +273,8 @@ function CanvasEdges({
                 y2={b.y}
                 stroke={stroke}
                 strokeWidth={2}
-                markerEnd={toArrow ? "url(#canvas-arrow)" : undefined}
-                markerStart={fromArrow ? "url(#canvas-arrow)" : undefined}
+                markerEnd={toArrow ? `url(#${markerId})` : undefined}
+                markerStart={fromArrow ? `url(#${markerId})` : undefined}
               />
               {e.label && (
                 <text x={mx} y={my} className="canvas-edge-label" textAnchor="middle">
@@ -372,7 +377,12 @@ function CanvasFileNodeView({
           if (!cancelled) setResolved(url);
         } else {
           const doc = await invoke<{ content: string }>("read_markdown_file", { path });
-          if (!cancelled) setResolved(doc.content);
+          // Honor a `#heading` / `#^block` subpath (JSON Canvas file nodes can
+          // scope an embed to a section, just like ![[note#heading]]).
+          const text = node.subpath
+            ? extractSection(doc.content, node.subpath.replace(/^#/, ""))
+            : doc.content;
+          if (!cancelled) setResolved(text);
         }
       } catch {
         if (!cancelled) setResolved(null);
@@ -381,7 +391,7 @@ function CanvasFileNodeView({
     return () => {
       cancelled = true;
     };
-  }, [node.file, isImage]);
+  }, [node.file, node.subpath, isImage]);
 
   const fileName = node.file.split("/").pop() ?? node.file;
 

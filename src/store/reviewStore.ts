@@ -27,7 +27,12 @@ interface ReviewState {
   registerReview: (review: PendingReview) => void;
   setDraftComment: (text: string) => void;
   submitVerdict: (verdict: ReviewVerdict) => Promise<void>;
-  dismiss: () => void;
+  /**
+   * Dismiss the pending review. Pass the `reviewId` it's meant to dismiss (e.g.
+   * from an expiring countdown) so a late firing can't dismiss a *newer* review
+   * that has since replaced it.
+   */
+  dismiss: (reviewId?: string) => void;
 }
 
 export const useReviewStore = create<ReviewState>((set, get) => ({
@@ -50,16 +55,18 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
     });
   },
 
-  dismiss: () => {
+  dismiss: (reviewId?: string) => {
     const { pending } = get();
-    if (pending) {
-      // Record a "dismissed" verdict so the agent's poll exits promptly.
-      void invoke("set_review_verdict", {
-        reviewId: pending.reviewId,
-        verdict: "dismissed",
-        comments: null,
-      }).catch(() => {});
-    }
+    if (!pending) return;
+    // Only act if the caller's target is still the pending review — guards a
+    // stale countdown from dismissing a review the human hasn't seen yet.
+    if (reviewId && reviewId !== pending.reviewId) return;
+    // Record a "dismissed" verdict so the agent's poll exits promptly.
+    void invoke("set_review_verdict", {
+      reviewId: pending.reviewId,
+      verdict: "dismissed",
+      comments: null,
+    }).catch(() => {});
     set({ pending: null, draftComment: "" });
   },
 }));

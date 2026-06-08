@@ -57,6 +57,7 @@ export function ReviewPanel() {
           <strong>{fileNameOf(pending.path)}</strong>
         </span>
         <ReviewCountdown
+          reviewId={pending.reviewId}
           registeredAt={pending.registeredAt}
           timeoutMs={pending.timeoutMs}
           onExpire={dismiss}
@@ -64,7 +65,7 @@ export function ReviewPanel() {
         <button
           type="button"
           className="review-panel__close"
-          onClick={dismiss}
+          onClick={() => dismiss()}
           aria-label="Dismiss review"
         >
           ✕
@@ -101,13 +102,15 @@ export function ReviewPanel() {
 }
 
 function ReviewCountdown({
+  reviewId,
   registeredAt,
   timeoutMs,
   onExpire,
 }: {
+  reviewId: string;
   registeredAt: number;
   timeoutMs: number;
-  onExpire: () => void;
+  onExpire: (reviewId: string) => void;
 }) {
   const [remaining, setRemaining] = useState(() =>
     Math.max(0, timeoutMs - (Date.now() - registeredAt)),
@@ -124,14 +127,14 @@ function ReviewCountdown({
       setRemaining(r);
       if (r === 0) {
         clearInterval(tick);
-        onExpire();
+        onExpire(reviewId);
       }
     }, 1000);
     return () => {
       alive = false;
       clearInterval(tick);
     };
-  }, [registeredAt, timeoutMs, onExpire]);
+  }, [reviewId, registeredAt, timeoutMs, onExpire]);
 
   const m = Math.floor(remaining / 60000);
   const s = Math.floor((remaining % 60000) / 1000);

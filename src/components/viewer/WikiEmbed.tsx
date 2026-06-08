@@ -75,7 +75,7 @@ export function WikiEmbed({ target, size }: WikiEmbedProps) {
     return () => {
       cancelled = true;
     };
-  }, [target, isImage, fragment, depth]);
+  }, [target, file, isImage, fragment, depth]);
 
   // A blank target (e.g. the data attribute was stripped) — render nothing.
   if (!target) return null;
