@@ -3,6 +3,21 @@
 All notable changes to Ashlr MD are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.4.1] — Unreleased
+
+### Fixed
+- **Agent IPC no longer stalls under concurrent requests.** The loopback server
+  now handles requests on a small worker pool, so a slow/large response (e.g. a
+  big `/content` read) can't block the agent's review polling behind it. The MCP
+  binary also bounds its socket *write* with a timeout, so a wedged server can't
+  hang the agent's tool call.
+- **Canvas:** arrowheads no longer break when two `.canvas` files are open at
+  once (each canvas now uses a unique SVG marker id), and `file` nodes that point
+  at a section (`note#Heading` / `#^block`) now embed just that section instead of
+  the whole document.
+- **Review loop:** an expiring review countdown can no longer dismiss a *newer*
+  review that replaced it — dismissal is now scoped to the review it targets.
+
 ## [0.4.0] — 2026-06-06
 
 ### Agent integration & human review

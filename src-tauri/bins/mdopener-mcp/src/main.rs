@@ -818,6 +818,11 @@ fn tcp_roundtrip(host: &str, port: u16, request: &[u8]) -> Result<Vec<u8>, Strin
     stream
         .set_read_timeout(Some(Duration::from_secs(5)))
         .ok();
+    // Also bound the write — otherwise a stalled IPC server thread could block
+    // write_all indefinitely and hang the MCP binary's whole stdio loop.
+    stream
+        .set_write_timeout(Some(Duration::from_secs(5)))
+        .ok();
     stream
         .write_all(request)
         .map_err(|e| format!("IPC write error: {e}"))?;

@@ -272,32 +272,54 @@ fn check_auth(req: &Request, bearer: &str) -> bool {
 }
 
 fn run_server(server: Server, app: AppHandle, bearer: std::sync::Arc<String>) {
-    for req in server.incoming_requests() {
-        let method = req.method().clone();
-        let url = req.url().to_string();
-        // Separate path from query string.
-        let (path, query) = url.split_once('?').unwrap_or((url.as_str(), ""));
+    // Serve on a small worker pool. A single thread would let one slow/blocked
+    // response write (e.g. a large `/content` read to a slow client) stall every
+    // other request — including the MCP review poll — behind it. tiny_http's
+    // `Server` is `Sync`, so several threads can `recv()` from it concurrently.
+    const WORKERS: usize = 4;
+    let server = std::sync::Arc::new(server);
+    let mut handles = Vec::with_capacity(WORKERS);
+    for _ in 0..WORKERS {
+        let server = server.clone();
+        let app = app.clone();
+        let bearer = bearer.clone();
+        handles.push(std::thread::spawn(move || {
+            while let Ok(req) = server.recv() {
+                handle_request(req, &app, &bearer);
+            }
+        }));
+    }
+    for h in handles {
+        let _ = h.join();
+    }
+}
 
-        // /health is unauthenticated — a liveness probe carrying no data.
-        if method == Method::Get && path == "/health" {
-            send_json(req, serde_json::json!({"ok": true}));
-            continue;
-        }
-        // Every other endpoint requires the loopback auth token.
-        if !check_auth(&req, &bearer) {
-            send_error(req, 401, "Unauthorized");
-            continue;
-        }
+fn handle_request(req: Request, app: &AppHandle, bearer: &str) {
+    let method = req.method().clone();
+    let url = req.url().to_string();
+    // Separate path from query string.
+    let (path, query) = url.split_once('?').unwrap_or((url.as_str(), ""));
 
-        match (method, path) {
-            (Method::Post, "/review") => handle_review_post(req, &app),
-            (Method::Get, "/review/result") => handle_review_result(req, query, &app),
-            (Method::Get, "/annotations") => handle_annotations(req, query, &app),
+    // /health is unauthenticated — a liveness probe carrying no data.
+    if method == Method::Get && path == "/health" {
+        send_json(req, serde_json::json!({"ok": true}));
+        return;
+    }
+    // Every other endpoint requires the loopback auth token.
+    if !check_auth(&req, bearer) {
+        send_error(req, 401, "Unauthorized");
+        return;
+    }
 
-            (Method::Get, "/vault") => handle_vault(req, &app),
-            (Method::Get, "/search") => handle_search(req, query, &app),
-            (Method::Post, "/edit") => handle_edit(req, &app),
-            (Method::Post, "/present") => handle_present(req, &app),
+    match (method, path) {
+            (Method::Post, "/review") => handle_review_post(req, app),
+            (Method::Get, "/review/result") => handle_review_result(req, query, app),
+            (Method::Get, "/annotations") => handle_annotations(req, query, app),
+
+            (Method::Get, "/vault") => handle_vault(req, app),
+            (Method::Get, "/search") => handle_search(req, query, app),
+            (Method::Post, "/edit") => handle_edit(req, app),
+            (Method::Post, "/present") => handle_present(req, app),
 
             (Method::Get, "/content") => {
                 let mirror = app.state::<DocMirror>();
@@ -308,9 +330,9 @@ fn run_server(server: Server, app: AppHandle, bearer: std::sync::Arc<String>) {
                 }));
             }
 
-            (Method::Post, "/content") => handle_set_content(req, &app),
+            (Method::Post, "/content") => handle_set_content(req, app),
 
-            (Method::Post, "/open") => handle_open(req, &app),
+            (Method::Post, "/open") => handle_open(req, app),
 
             (Method::Get, "/recent") => {
                 let limit: usize = query
@@ -324,13 +346,12 @@ fn run_server(server: Server, app: AppHandle, bearer: std::sync::Arc<String>) {
                 send_json(req, serde_json::json!(recents));
             }
 
-            (Method::Post, "/export") => handle_export(req, &app),
+            (Method::Post, "/export") => handle_export(req, app),
 
             _ => {
                 let _ = req.respond(Response::from_string("Not Found").with_status_code(404));
             }
         }
-    }
 }
 
 // ── Individual handlers ───────────────────────────────────────────────────────
