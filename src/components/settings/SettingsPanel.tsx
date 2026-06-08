@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { useFocusTrap } from "../../lib/useFocusTrap";
 import { useUiStore } from "../../store/uiStore";
 import {
   AgentIcon,
@@ -56,13 +57,9 @@ export function SettingsPanel() {
     return () => window.removeEventListener("keydown", onKey, true);
   }, [close]);
 
-  // Trap focus: move to first focusable element on open.
-  useEffect(() => {
-    const first = panelRef.current?.querySelector<HTMLElement>(
-      "button:not(:disabled), [tabindex='0']",
-    );
-    first?.focus();
-  }, []);
+  // Trap focus inside the panel (Tab cycling) and restore focus to the trigger
+  // on close. Replaces the prior "focus first element on open" one-liner.
+  useFocusTrap(panelRef);
 
   return (
     /* Backdrop — click outside to close */

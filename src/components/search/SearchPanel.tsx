@@ -65,7 +65,10 @@ export function SearchPanel() {
   return (
     <aside
       className={`search-panel${open ? " search-panel--open" : ""}`}
-      aria-hidden={!open}
+      aria-label="Search files"
+      // Off-screen-but-in-DOM when closed: `inert` keeps its controls out of the
+      // tab order + a11y tree until opened.
+      inert={!open}
     >
       <div className="search-panel__header">
         <div className="search-panel__title">Search files</div>

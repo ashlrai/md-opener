@@ -57,6 +57,24 @@ select:focus-visible {
   outline: none;
 }
 
+/* ---- Reduced motion ----
+   A global safety net: when the user asks the OS to minimize motion, calm every
+   animation, transition, and smooth scroll across the whole app (overrides any
+   per-component motion in a single place). Individual surfaces may still add
+   their own finer-grained reduced-motion blocks; this guarantees the baseline.
+   We keep a near-zero (1ms) duration rather than 0s so transition-end / animation
+   -end listeners still fire and state machines don't hang. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 /* Custom scrollbars — unobtrusive, theme-aware. */
 ::-webkit-scrollbar {
   width: 11px;

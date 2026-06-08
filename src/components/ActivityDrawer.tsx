@@ -173,7 +173,9 @@ export function ActivityDrawer() {
     <aside
       className={`activity-drawer${open ? " activity-drawer--open" : ""}`}
       aria-label="Agent Activity"
-      aria-hidden={!open}
+      // Off-screen-but-in-DOM when closed: `inert` keeps its controls out of the
+      // tab order + a11y tree until opened.
+      inert={!open}
     >
       {/* Header */}
       <div className="activity-drawer__header">

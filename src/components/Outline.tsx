@@ -143,7 +143,10 @@ export function Outline() {
     <aside
       className={`outline-panel${open ? " outline-panel--open" : ""}`}
       aria-label="Document outline"
-      aria-hidden={!open}
+      // When the dock is slid off-screen it stays in the DOM; `inert` removes it
+      // from the tab order + accessibility tree so closed-panel buttons can't be
+      // focused or announced.
+      inert={!open}
     >
       <div className="outline-panel__header">
         <div className="outline-panel__title">Outline</div>

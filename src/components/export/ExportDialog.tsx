@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { exportDocx, exportHtml, exportPdf } from "../../lib/export";
+import { useFocusTrap } from "../../lib/useFocusTrap";
 import { useDocumentStore } from "../../store/documentStore";
 import { useUiStore } from "../../store/uiStore";
 import "../../styles/export.css";
@@ -132,14 +133,10 @@ export function ExportDialog() {
     return () => window.removeEventListener("keydown", onKey, true);
   }, [close]);
 
-  // Trap focus inside the dialog.
+  // Trap focus inside the dialog (Tab cycling) and restore focus to the trigger
+  // on close.
   const dialogRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const firstFocusable = dialogRef.current?.querySelector<HTMLElement>(
-      "button:not(:disabled)",
-    );
-    firstFocusable?.focus();
-  }, []);
+  useFocusTrap(dialogRef);
 
   // ── Generic runner ────────────────────────────────────────────────────────
 

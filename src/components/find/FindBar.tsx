@@ -19,11 +19,17 @@ export function FindBar() {
   const [count, setCount] = useState(0);
   const [index, setIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
+  const restoreFocusRef = useRef<HTMLElement | null>(null);
 
-  // Focus on open.
+  // Focus the input on open; remember the prior focus and restore it on close so
+  // keyboard users land back where they were (usually the reading surface).
   useEffect(() => {
+    restoreFocusRef.current = document.activeElement as HTMLElement | null;
     inputRef.current?.focus();
     inputRef.current?.select();
+    return () => {
+      if (restoreFocusRef.current?.isConnected) restoreFocusRef.current.focus?.();
+    };
   }, []);
 
   // Re-highlight on query or document change; clear on unmount.

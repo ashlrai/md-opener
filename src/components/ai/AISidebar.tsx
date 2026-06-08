@@ -235,6 +235,7 @@ export function AISidebar() {
   const abortRef = useRef<AbortController | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const restoreFocusRef = useRef<HTMLElement | null>(null);
 
   const isNoop = providerId === NOOP_PROVIDER_ID;
 
@@ -268,10 +269,15 @@ export function AISidebar() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // Focus input when sidebar opens.
+  // Focus input when sidebar opens; restore focus to the trigger (the AI toggle
+  // button) when it closes so keyboard users aren't stranded.
   useEffect(() => {
     if (open && !isNoop) {
+      restoreFocusRef.current = document.activeElement as HTMLElement | null;
       setTimeout(() => inputRef.current?.focus(), 250);
+    } else if (!open && restoreFocusRef.current?.isConnected) {
+      restoreFocusRef.current.focus?.();
+      restoreFocusRef.current = null;
     }
   }, [open, isNoop]);
 
