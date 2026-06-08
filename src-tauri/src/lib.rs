@@ -51,6 +51,7 @@ pub fn run() {
             document::read_image_data_url,
             document::filter_existing,
             document::apply_file_patch,
+            document::save_pasted_image,
             export::write_file_bytes,
             file_handler::take_pending_files,
             watcher::watch_file,

@@ -403,6 +403,100 @@ pub fn apply_file_patch(
     Ok(resolved_str)
 }
 
+/// Image extensions accepted for a pasted-image save (lower-cased, no dot).
+const PASTE_IMAGE_EXTS: &[&str] = &["png", "jpg", "jpeg", "gif", "webp", "svg"];
+/// Cap a pasted image's size — mirrors `read_image_data_url`'s embed cap so a
+/// hostile/huge clipboard payload can't fill the disk or balloon memory.
+const MAX_PASTE_IMAGE_BYTES: usize = 25 * 1024 * 1024;
+
+/// Save a pasted clipboard image next to the open document and return the
+/// Markdown-relative path to insert (e.g. `assets/pasted-1.png`).
+///
+/// `doc_path` is the absolute path of the currently-open document; the image is
+/// written into an `assets/` subdirectory of that document's folder (created on
+/// demand). `bytes` is the raw image payload and `ext` its extension (no dot).
+///
+/// SECURITY: the write is CONFINED to the document's own directory subtree using
+/// the same canonicalize-then-`starts_with` check as `apply_file_patch`. The
+/// generated filename is a fixed `pasted-<n>.<ext>` (no caller-supplied name), so
+/// `ext` is the only untrusted component and it is checked against an allowlist;
+/// even so we re-resolve the final path and reject anything that escapes the doc
+/// dir. Size is capped to match `read_image_data_url`.
+#[tauri::command]
+pub fn save_pasted_image(doc_path: String, bytes: Vec<u8>, ext: String) -> Result<String, String> {
+    if bytes.is_empty() {
+        return Err("Pasted image is empty.".into());
+    }
+    if bytes.len() > MAX_PASTE_IMAGE_BYTES {
+        return Err("Pasted image is too large (>25 MiB).".into());
+    }
+
+    // Validate the extension against the allowlist (case-insensitive).
+    let ext = ext.trim().trim_start_matches('.').to_ascii_lowercase();
+    if !PASTE_IMAGE_EXTS.contains(&ext.as_str()) {
+        return Err(format!(
+            "Unsupported image type '{ext}'. Allowed: {}.",
+            PASTE_IMAGE_EXTS.join(", ")
+        ));
+    }
+
+    // The document's directory is the confinement root. Canonicalize it first so
+    // the `starts_with` check below compares symlink-resolved paths.
+    let doc = Path::new(&doc_path);
+    let base = doc
+        .parent()
+        .ok_or("The open document has no parent directory.")?;
+    let base = std::fs::canonicalize(base)
+        .map_err(|e| format!("Cannot resolve the document's folder: {e}"))?;
+
+    // Ensure the assets/ subdir exists, then re-resolve it and confirm it stays
+    // under base (a symlinked `assets` can't redirect the write elsewhere).
+    let assets_dir = base.join("assets");
+    std::fs::create_dir_all(&assets_dir)
+        .map_err(|e| format!("Could not create the assets folder: {e}"))?;
+    let canon_assets = std::fs::canonicalize(&assets_dir)
+        .map_err(|e| format!("Cannot resolve the assets folder: {e}"))?;
+    if !canon_assets.starts_with(&base) {
+        return Err("Refusing to write outside the document's own folder.".into());
+    }
+
+    // Pick a non-colliding `pasted-<n>.<ext>` filename.
+    let mut n: u32 = 1;
+    let target = loop {
+        let candidate = canon_assets.join(format!("pasted-{n}.{ext}"));
+        if !candidate.exists() {
+            break candidate;
+        }
+        n += 1;
+        if n > 100_000 {
+            return Err("Could not find a free filename in assets/.".into());
+        }
+    };
+
+    // Final confinement re-check on the resolved parent, mirroring apply_file_patch.
+    let parent = target
+        .parent()
+        .ok_or("The image target has no parent directory.")?;
+    let canon_parent = std::fs::canonicalize(parent)
+        .map_err(|e| format!("Cannot resolve the image target's folder: {e}"))?;
+    if !canon_parent.starts_with(&base) {
+        return Err("Refusing to write outside the document's own folder.".into());
+    }
+
+    // Atomic write: temp sibling then rename, matching write_markdown_file.
+    let target_str = target.to_string_lossy().into_owned();
+    let tmp = format!("{target_str}.mdopener.tmp");
+    std::fs::write(&tmp, &bytes).map_err(|e| format!("Could not write the image: {e}"))?;
+    std::fs::rename(&tmp, &target).map_err(|e| {
+        let _ = std::fs::remove_file(&tmp);
+        format!("Could not save the image: {e}")
+    })?;
+
+    // Return the path RELATIVE to the document for insertion (forward slashes so
+    // the Markdown is portable across platforms).
+    Ok(format!("assets/pasted-{n}.{ext}"))
+}
+
 /// Open the given file in Obsidian via the `obsidian://open?path=…` URI scheme.
 #[tauri::command]
 pub fn open_in_obsidian(app: tauri::AppHandle, path: String) -> Result<(), String> {
@@ -574,6 +668,88 @@ mod tests {
         .unwrap_err();
         // Either "outside" (if /etc resolves) or a resolve error — never a write.
         assert!(!err.is_empty());
+    }
+
+    #[test]
+    fn save_pasted_image_writes_into_assets_and_returns_relative_path() {
+        let root = make_tree();
+        let doc = root.join("notes").join("doc.md");
+        std::fs::write(&doc, "# Doc").unwrap();
+        let rel = save_pasted_image(s(&doc), b"\x89PNG\r\n".to_vec(), "png".into()).unwrap();
+        assert_eq!(rel, "assets/pasted-1.png");
+        // The bytes landed under notes/assets/, confined to the doc's folder.
+        let written = root.join("notes").join("assets").join("pasted-1.png");
+        assert_eq!(std::fs::read(&written).unwrap(), b"\x89PNG\r\n");
+    }
+
+    #[test]
+    fn save_pasted_image_increments_to_avoid_collisions() {
+        let root = make_tree();
+        let doc = root.join("doc.md");
+        std::fs::write(&doc, "# Doc").unwrap();
+        let first = save_pasted_image(s(&doc), b"a".to_vec(), "png".into()).unwrap();
+        let second = save_pasted_image(s(&doc), b"b".to_vec(), "png".into()).unwrap();
+        assert_eq!(first, "assets/pasted-1.png");
+        assert_eq!(second, "assets/pasted-2.png");
+    }
+
+    #[test]
+    fn save_pasted_image_normalizes_extension() {
+        let root = make_tree();
+        let doc = root.join("doc.md");
+        std::fs::write(&doc, "# Doc").unwrap();
+        // Leading dot + mixed case + whitespace are all normalized.
+        let rel = save_pasted_image(s(&doc), b"x".to_vec(), " .JPG ".into()).unwrap();
+        assert_eq!(rel, "assets/pasted-1.jpg");
+    }
+
+    #[test]
+    fn save_pasted_image_rejects_disallowed_extension() {
+        let root = make_tree();
+        let doc = root.join("doc.md");
+        std::fs::write(&doc, "# Doc").unwrap();
+        // An executable extension is not on the allowlist → refused, nothing written.
+        let err = save_pasted_image(s(&doc), b"MZ".to_vec(), "exe".into()).unwrap_err();
+        assert!(err.contains("Unsupported"), "got: {err}");
+        assert!(!root.join("assets").exists());
+    }
+
+    #[test]
+    fn save_pasted_image_rejects_path_traversal_in_extension() {
+        let root = make_tree();
+        let doc = root.join("doc.md");
+        std::fs::write(&doc, "# Doc").unwrap();
+        // A `../`-style extension can never match the allowlist, so the only
+        // untrusted input can't escape the assets/ subtree.
+        let err =
+            save_pasted_image(s(&doc), b"x".to_vec(), "../../etc/passwd".into()).unwrap_err();
+        assert!(err.contains("Unsupported"), "got: {err}");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn save_pasted_image_rejects_symlinked_assets_escape() {
+        // If `assets` is a symlink pointing OUTSIDE the doc's folder, the write
+        // must be refused — confinement compares symlink-resolved paths.
+        let root = make_tree();
+        let docdir = root.join("notes");
+        let doc = docdir.join("doc.md");
+        std::fs::write(&doc, "# Doc").unwrap();
+        let outside = root.join("outside");
+        std::fs::create_dir_all(&outside).unwrap();
+        std::os::unix::fs::symlink(&outside, docdir.join("assets")).unwrap();
+        let err = save_pasted_image(s(&doc), b"x".to_vec(), "png".into()).unwrap_err();
+        assert!(err.contains("outside"), "got: {err}");
+    }
+
+    #[test]
+    fn save_pasted_image_rejects_oversize_payload() {
+        let root = make_tree();
+        let doc = root.join("doc.md");
+        std::fs::write(&doc, "# Doc").unwrap();
+        let huge = vec![0u8; MAX_PASTE_IMAGE_BYTES + 1];
+        let err = save_pasted_image(s(&doc), huge, "png".into()).unwrap_err();
+        assert!(err.contains("too large"), "got: {err}");
     }
 
     #[cfg(unix)]

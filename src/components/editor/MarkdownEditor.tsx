@@ -8,6 +8,7 @@ import "@milkdown/crepe/theme/frame.css";
 import type { ActionId } from "../../ai/actions";
 import { NoProviderError, runInlineTransform } from "../../ai/inline";
 import { joinFrontmatter, splitFrontmatter } from "../../lib/frontmatter";
+import { clipboardHasImage, handleImagePaste } from "../../lib/pasteImage";
 import { useDocumentStore } from "../../store/documentStore";
 import "../../styles/editor.css";
 
@@ -178,6 +179,29 @@ function CrepeInner({ initialContent }: { initialContent: string }) {
       proseRef.current = null;
     }
   }, [loading, get]);
+
+  // Paste an image → save it next to the doc and insert a relative ![](assets/…)
+  // embed at the cursor. Bound on the ProseMirror DOM (capture phase) so it runs
+  // before Crepe's own paste handling; non-image pastes fall through untouched.
+  useEffect(() => {
+    if (loading) return;
+    const view = proseRef.current;
+    if (!view) return;
+    const onPaste = (event: ClipboardEvent) => {
+      if (!clipboardHasImage(event.clipboardData)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      void handleImagePaste(event.clipboardData).then((markdownRef) => {
+        if (!markdownRef) return;
+        const { from, to } = view.state.selection;
+        // insertText routes the raw Markdown through the editor; Crepe's
+        // markdownUpdated listener then re-parses it into a rendered image.
+        view.dispatch(view.state.tr.insertText(markdownRef, from, to));
+      });
+    };
+    view.dom.addEventListener("paste", onPaste, true);
+    return () => view.dom.removeEventListener("paste", onPaste, true);
+  }, [loading]);
 
   // Track selection changes (mouse + keyboard) to show/hide the affordance,
   // and bind mod+I / Esc at the document level scoped to focus in this editor.

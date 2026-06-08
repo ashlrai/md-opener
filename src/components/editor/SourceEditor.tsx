@@ -7,6 +7,7 @@ import { EditorView, keymap, lineNumbers } from "@codemirror/view";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ActionId } from "../../ai/actions";
 import { NoProviderError, runInlineTransform } from "../../ai/inline";
+import { clipboardHasImage, handleImagePaste } from "../../lib/pasteImage";
 import { setSourceView } from "../../lib/sourceSearchBridge";
 import { useDocumentStore } from "../../store/documentStore";
 import { useSettingsStore } from "../../store/settingsStore";
@@ -202,6 +203,25 @@ export function SourceEditor({ initialContent }: { initialContent: string }) {
           keymap.of(searchKeymap),
           keymap.of([...defaultKeymap, ...historyKeymap]),
           markdown(),
+          // Paste an image → save it next to the doc and insert a relative
+          // ![](assets/…) embed at the cursor. Non-image pastes fall through to
+          // CodeMirror's default handling.
+          EditorView.domEventHandlers({
+            paste: (event, view) => {
+              if (!clipboardHasImage(event.clipboardData)) return false;
+              event.preventDefault();
+              void handleImagePaste(event.clipboardData).then((markdownRef) => {
+                if (!markdownRef) return;
+                const { from, to } = view.state.selection.main;
+                view.dispatch({
+                  changes: { from, to, insert: markdownRef },
+                  selection: { anchor: from + markdownRef.length },
+                });
+                setContentRef.current(view.state.doc.toString());
+              });
+              return true;
+            },
+          }),
           EditorView.lineWrapping,
           EditorView.updateListener.of((u) => {
             if (u.docChanged) setContentRef.current(u.state.doc.toString());
