@@ -272,13 +272,19 @@ export function AISidebar() {
   // Focus input when sidebar opens; restore focus to the trigger (the AI toggle
   // button) when it closes so keyboard users aren't stranded.
   useEffect(() => {
-    if (open && !isNoop) {
-      restoreFocusRef.current = document.activeElement as HTMLElement | null;
-      setTimeout(() => inputRef.current?.focus(), 250);
-    } else if (!open && restoreFocusRef.current?.isConnected) {
-      restoreFocusRef.current.focus?.();
-      restoreFocusRef.current = null;
-    }
+    if (!open || isNoop) return;
+    restoreFocusRef.current = document.activeElement as HTMLElement | null;
+    const t = setTimeout(() => inputRef.current?.focus(), 250);
+    // Restore in cleanup so focus is returned both on close (open → false) AND
+    // on unmount while still open (e.g. the tab is closed) — otherwise keyboard
+    // focus is stranded on <body>.
+    return () => {
+      clearTimeout(t);
+      if (restoreFocusRef.current?.isConnected) {
+        restoreFocusRef.current.focus?.();
+        restoreFocusRef.current = null;
+      }
+    };
   }, [open, isNoop]);
 
   // Build system context from current document (truncated to MAX_CONTEXT_CHARS).
