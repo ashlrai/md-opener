@@ -150,8 +150,11 @@ const FINDING_RE = new RegExp(
     //     (e.g. the colon in `**High:**`) … matching close.
     String.raw`(?:\*\*\[|\[|\*\*|__)(${SEVERITY_ALT})\b[ \t]*[:\-—–)|]?[ \t]*(?:\]\*\*|\]|\*\*|__)` +
     "|" +
-    // (b) bare word + required delimiter / EOL.
-    String.raw`(${SEVERITY_ALT})\b[ \t]*(?:[:\-—–)|]|$)` +
+    // (b) bare word + required delimiter / EOL. A hyphen only counts as a tag
+    //     delimiter when followed by whitespace or EOL ("High - SQLi"), NOT when
+    //     it joins a compound word ("High-level", "Low-level", "Medium-sized") —
+    //     otherwise ordinary architecture headings would read as findings.
+    String.raw`(${SEVERITY_ALT})\b[ \t]*(?:[:)|—–]|-(?=[ \t]|$)|$)` +
     ")",
   "i",
 );

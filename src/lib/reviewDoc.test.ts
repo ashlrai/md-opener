@@ -185,6 +185,24 @@ describe("detectReviewDoc — negative cases (must return null)", () => {
     ].join("\n");
     expect(detectReviewDoc(doc)).toBeNull();
   });
+
+  it("returns null for hyphenated compounds (High-level / Low-level / Medium-sized)", () => {
+    // The classic false positive: a severity word joined into a compound by a
+    // hyphen must NOT read as a tagged finding.
+    const doc = [
+      "# Architecture",
+      "",
+      "## High-level overview",
+      "The system has three layers.",
+      "",
+      "## Low-level details",
+      "Internals live here.",
+      "",
+      "## Medium-sized modules",
+      "Some notes about Low-hanging fruit and High-priority work.",
+    ].join("\n");
+    expect(detectReviewDoc(doc)).toBeNull();
+  });
 });
 
 describe("detectReviewDoc — file reference parsing", () => {
