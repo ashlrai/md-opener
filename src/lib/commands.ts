@@ -20,6 +20,7 @@ import { THEMES, type ThemeId, useSettingsStore } from "../store/settingsStore";
 import { toast } from "../store/toastStore";
 import { useUiStore } from "../store/uiStore";
 import { unwatchDirectory } from "./activity";
+import { copyDocumentAsRichText } from "./copyRichText";
 import { exportDocx, exportHtml, exportPdf } from "./export";
 import { pickAndOpen } from "./openFile";
 import { getSourceView } from "./sourceSearchBridge";
@@ -373,6 +374,27 @@ export function getCommands(): Command[] {
     //   • New Tab        — "mod+t"
     //   • Toggle Activity— "mod+shift+a"
     // Each should carry a `when()` predicate and (optionally) a `shortcut`.
+    {
+      id: "edit.copyRichText",
+      title: "Copy as rich text",
+      group: "File",
+      hint: "Formatted HTML + Markdown source",
+      keywords: [
+        "copy",
+        "rich",
+        "html",
+        "clipboard",
+        "formatted",
+        "paste",
+        "gmail",
+        "slack",
+      ],
+      shortcut: "mod+shift+c",
+      when: hasDoc,
+      // Switches to read view + waits internally (like runExport) so it works
+      // from any view.
+      run: () => copyDocumentAsRichText(),
+    },
 
     // ── Tabs ──────────────────────────────────────────────────────────────
     {
