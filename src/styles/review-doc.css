@@ -1,0 +1,202 @@
+/* review-doc.css — summary card for agent review / findings documents.
+   Rendered above the Markdown body by ReviewSummaryCard.tsx when
+   detectReviewDoc() classifies a document as a review. Shares the app's badge,
+   callout, and elevation vocabulary (see callouts.css) and is themed entirely
+   through tokens, so it follows light / dark / sepia automatically.
+
+   Severity colors reuse the existing --callout-*-color tokens so the palette
+   stays consistent with callouts and the doc-kind badge:
+     blocker / critical → caution (red)
+     high / major       → warning (amber)
+     medium             → important (purple)
+     low / minor        → note (blue)
+     nit / info         → tip (green) / muted
+*/
+
+.review-card {
+  --sev-color: var(--text-secondary);
+  margin: 0 0 1.6em;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm, none);
+  font-family: var(--ui-font);
+}
+
+/* ── Header row ─────────────────────────────────────────────────────────── */
+
+.review-card__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.review-card__icon {
+  color: var(--accent);
+  font-size: 14px;
+  line-height: 1;
+}
+
+.review-card__title {
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.review-card__total {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.review-card__confidence {
+  margin-left: auto;
+  font-family: var(--mono-font);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+  padding: 2px 8px;
+  background: var(--code-bg);
+  border-radius: var(--radius-sm);
+}
+
+/* ── Severity badge row ─────────────────────────────────────────────────── */
+
+.review-card__badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 11px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.review-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px 3px 7px;
+  border-radius: 100px;
+  font-size: 11.5px;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  border: 1px solid color-mix(in srgb, var(--sev-color) 35%, var(--border));
+  background: color-mix(in srgb, var(--sev-color) 10%, var(--surface));
+  color: var(--sev-color);
+  user-select: none;
+}
+
+.review-badge__count {
+  font-variant-numeric: tabular-nums;
+  font-weight: 750;
+}
+
+.review-badge__label {
+  text-transform: uppercase;
+  font-size: 10.5px;
+}
+
+/* ── Findings list ──────────────────────────────────────────────────────── */
+
+.review-card__findings {
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.review-card__finding {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.review-card__finding-dot {
+  flex: 0 0 auto;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--sev-color);
+  transform: translateY(-1px);
+}
+
+.review-card__finding-link {
+  color: var(--text);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  cursor: pointer;
+}
+.review-card__finding-link:hover {
+  color: var(--accent);
+  border-bottom-color: color-mix(in srgb, var(--accent) 50%, transparent);
+}
+
+.review-card__finding-text {
+  color: var(--text);
+}
+
+.review-card__finding-conf {
+  margin-left: auto;
+  font-family: var(--mono-font);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+}
+
+/* ── Per-severity color binding ─────────────────────────────────────────── */
+/* Set --sev-color on any element carrying data-severity (badges + dots), so
+   the shared rules above resolve to the right token. */
+
+[data-severity="blocker"],
+[data-severity="critical"] {
+  --sev-color: var(--callout-caution-color);
+}
+[data-severity="high"],
+[data-severity="major"] {
+  --sev-color: var(--callout-warning-color);
+}
+[data-severity="medium"] {
+  --sev-color: var(--callout-important-color);
+}
+[data-severity="low"],
+[data-severity="minor"] {
+  --sev-color: var(--callout-note-color);
+}
+[data-severity="nit"] {
+  --sev-color: var(--callout-tip-color);
+}
+[data-severity="info"] {
+  --sev-color: var(--text-muted);
+}
+
+/* ── Scroll-target flash (added briefly by ReviewSummaryCard on click) ───── */
+
+.review-finding-flash {
+  animation: review-finding-flash 1.2s var(--ease, ease) both;
+  border-radius: var(--radius-sm);
+}
+
+@keyframes review-finding-flash {
+  0%,
+  100% {
+    background: transparent;
+  }
+  20% {
+    background: color-mix(in srgb, var(--accent) 16%, transparent);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .review-finding-flash {
+    animation: none;
+  }
+}

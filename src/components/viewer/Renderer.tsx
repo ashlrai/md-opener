@@ -13,9 +13,11 @@ import { type CalloutType, remarkCallouts } from "../../lib/remark-callouts";
 import { remarkComments } from "../../lib/remark-comments";
 import { remarkHighlights } from "../../lib/remark-highlights";
 import { remarkWikilinks } from "../../lib/remark-wikilinks";
+import { detectReviewDoc } from "../../lib/reviewDoc";
 import { SANITIZE_SCHEMA } from "../../lib/sanitizeSchema";
 import "../../styles/callouts.css";
 import "../../styles/reading.css";
+import "../../styles/review-doc.css";
 import "../../styles/wikilinks.css";
 import { Callout } from "./Callout";
 import { CodeBlock } from "./CodeBlock";
@@ -23,6 +25,7 @@ import { DiffBlock } from "./DiffBlock";
 import { FootnoteRef } from "./FootnoteRef";
 import { HeadingAnchor } from "./HeadingAnchor";
 import { MermaidBlock } from "./MermaidBlock";
+import { ReviewSummaryCard } from "./ReviewSummaryCard";
 import { TaskCheckbox } from "./TaskCheckbox";
 import { WikiEmbed } from "./WikiEmbed";
 import { Wikilink } from "./Wikilink";
@@ -202,15 +205,26 @@ interface RendererProps {
 
 export const Renderer = memo(function Renderer({ content }: RendererProps) {
   const info = useMemo(() => detectDocKind(content), [content]);
+  // Bespoke summary for agent review / findings docs. null for ordinary docs,
+  // so this is entirely non-invasive — nothing below changes when it's null.
+  const review = useMemo(() => detectReviewDoc(content), [content]);
 
   return (
-    <div className="markdown-body" data-doc-kind={info.kind ?? undefined}>
-      {info.kind && (
-        <DocKindBadge
-          kind={info.kind}
-          total={info.kind === "diff" ? info.hunkTotal : info.taskTotal}
-          done={info.kind === "diff" ? 0 : info.taskDone}
-        />
+    <div
+      className="markdown-body"
+      data-doc-kind={info.kind ?? undefined}
+      data-review={review ? "" : undefined}
+    >
+      {review ? (
+        <ReviewSummaryCard summary={review} />
+      ) : (
+        info.kind && (
+          <DocKindBadge
+            kind={info.kind}
+            total={info.kind === "diff" ? info.hunkTotal : info.taskTotal}
+            done={info.kind === "diff" ? 0 : info.taskDone}
+          />
+        )
       )}
       <ReactMarkdown
         remarkPlugins={[

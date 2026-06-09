@@ -13,6 +13,16 @@ All notable changes to Ashlr MD are documented here. This project adheres to
   Notion keeps headings, bold, lists, links, code, and tables, while pasting
   into a plain editor yields the raw Markdown. Falls back to a plain-text copy
   where the rich clipboard API is unavailable.
+- **Structured summary for agent review documents.** When an AI agent writes a
+  code-review or findings report — a list of findings each tagged with a
+  severity (Critical / High / Medium / Low / Blocker / Major / Minor / Nit /
+  Info), often with `Confidence:` lines and `path/to/file.ext:123` references —
+  the read view now shows a scannable summary card at the top: color-coded
+  severity counts, the total finding count, average confidence, and quick links
+  that scroll to each finding. Detection is conservative (it requires at least
+  two severity-tagged findings in structural positions, so ordinary prose that
+  merely uses the word "critical" is never affected) and the body Markdown
+  renders exactly as before beneath the card.
 - **Paste images straight into a document.** Pasting an image from the clipboard
   while editing saves it into an `assets/` folder next to the file and inserts a
   relative `![](assets/…)` embed at the cursor. Works in both the source and
