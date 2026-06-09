@@ -1,0 +1,68 @@
+{
+  "name": "ashlr-md-vscode",
+  "displayName": "Open in Ashlr MD",
+  "description": "Open the active Markdown file in the Ashlr MD desktop app from VS Code.",
+  "version": "1.0.0",
+  "publisher": "ashlr",
+  "license": "MIT",
+  "icon": "icon.png",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": ["Other"],
+  "keywords": ["markdown", "ashlr", "preview", "deep-link"],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ashlrai/ashlr-md.git",
+    "directory": "integrations/vscode"
+  },
+  "homepage": "https://md.ashlr.ai",
+  "activationEvents": [],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "ashlr-md.openInAshlr",
+        "title": "Open in Ashlr MD",
+        "category": "Ashlr MD",
+        "icon": "$(link-external)"
+      }
+    ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "ashlr-md.openInAshlr",
+          "when": "resourceLangId == markdown",
+          "group": "navigation"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "ashlr-md.openInAshlr",
+          "when": "resourceLangId == markdown"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Ashlr MD",
+      "properties": {
+        "ashlr-md.cliPath": {
+          "type": "string",
+          "default": "mdopen",
+          "description": "Path to the `mdopen` CLI used as a fallback if the mdopener:// deep link cannot be opened. Defaults to `mdopen` on your PATH."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "package": "vsce package --out ashlr-md-vscode.vsix"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "@types/vscode": "^1.85.0",
+    "typescript": "^5.5.2"
+  }
+}

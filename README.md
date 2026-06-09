@@ -88,6 +88,10 @@ especially for non-technical people. Ashlr MD does exactly that, on every platfo
 - **Obsidian integration** — the [Open in Ashlr MD](./integrations/obsidian/)
   plugin sends any vault note to Ashlr MD with one click (ribbon, command, and
   right-click) via the `mdopener://` scheme.
+- **VS Code integration** — the [Open in Ashlr MD](./integrations/vscode/)
+  extension opens the active `.md` file in Ashlr MD from an editor title-bar
+  button (or the command palette) via the `mdopener://` scheme, with a `mdopen`
+  CLI fallback.
 - **Smart agent output** — callouts, interactive checkboxes that save back to the
   file, and automatic plan / diff / multi-file detection with badges.
 - **Three themes** — Paper, Sepia, Midnight (light + dark) — switch live.

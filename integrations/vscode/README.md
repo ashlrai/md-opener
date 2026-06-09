@@ -1,0 +1,118 @@
+# Open in Ashlr MD — VS Code Extension
+
+Open the active Markdown file in the **[Ashlr MD](https://md.ashlr.ai)** desktop
+app — a beautiful, AI-native Markdown app — directly from VS Code.
+
+> **Desktop-only.** Requires Ashlr MD installed so the `mdopener://` URL scheme
+> is registered on your machine.
+
+---
+
+## What it does
+
+| Entry point | Action |
+|---|---|
+| **Editor title-bar button** (link icon, Markdown files only) | Open the active file in Ashlr MD |
+| **Command palette** → "Ashlr MD: Open in Ashlr MD" | Open the active Markdown file |
+
+The button and command appear only when a Markdown file is active
+(`resourceLangId == markdown`).
+
+---
+
+## How it works
+
+The extension resolves the file's absolute on-disk path, URI-encodes it, and
+opens the deep link:
+
+```
+mdopener://open?path=<encoded-absolute-path>
+```
+
+via `vscode.env.openExternal`. Ashlr MD registers this custom URL scheme and
+brings the file up instantly (cold-starting the app if needed).
+
+**CLI fallback.** If the deep link cannot be opened, the extension falls back to
+spawning the bundled `mdopen` CLI:
+
+```
+mdopen <absolute-path>
+```
+
+The CLI path is configurable via the **`ashlr-md.cliPath`** setting (default
+`mdopen`, resolved on your `PATH`). Install the CLI from inside Ashlr MD via the
+**"Install CLI tool"** command.
+
+### Edge cases handled
+
+- **No active editor** — informational message.
+- **Non-Markdown file** — informational message.
+- **Untitled / never-saved file** — prompts you to save first (there is no
+  on-disk path to hand off). Saved-but-dirty files open their last-saved
+  on-disk version (the extension does not auto-save).
+
+---
+
+## Requirements
+
+- **Ashlr MD** installed — [download here](https://md.ashlr.ai) — so the
+  `mdopener://` scheme is registered.
+- VS Code **1.85.0** or later.
+
+---
+
+## Build
+
+```bash
+cd integrations/vscode
+npm install
+npm run compile     # tsc → out/extension.js
+```
+
+Or with Bun:
+
+```bash
+bun install
+bun run compile
+```
+
+### Package a `.vsix`
+
+```bash
+npm install -g @vscode/vsce   # one-time
+npm run package               # → ashlr-md-vscode.vsix
+```
+
+---
+
+## Install (from source)
+
+1. Build (see above) so `out/extension.js` exists.
+2. Either:
+   - Open this `integrations/vscode/` folder in VS Code and press **F5** to
+     launch an Extension Development Host, **or**
+   - Run `npm run package` and install the resulting `.vsix` via
+     **Extensions panel → ⋯ → Install from VSIX…**.
+
+---
+
+## Configuration
+
+| Setting | Default | Description |
+|---|---|---|
+| `ashlr-md.cliPath` | `mdopen` | Path to the `mdopen` CLI used as a fallback if the deep link cannot be opened. |
+
+---
+
+## Caveats
+
+- **Ashlr MD must be installed.** If the `mdopener://` scheme is not registered
+  and the `mdopen` CLI is not on `PATH`, the extension shows an error pointing
+  to [md.ashlr.ai](https://md.ashlr.ai).
+- **Not published to the Marketplace** yet — install from source / `.vsix`.
+
+---
+
+## License
+
+MIT — part of the [Ashlr MD](https://github.com/ashlrai/ashlr-md) project.
