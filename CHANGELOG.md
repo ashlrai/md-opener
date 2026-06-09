@@ -6,6 +6,13 @@ All notable changes to Ashlr MD are documented here. This project adheres to
 ## [0.4.1] — Unreleased
 
 ### Added
+- **Copy as rich text.** A new command (⌘⇧C / palette: "Copy as rich text")
+  copies the current document to the clipboard as formatted rich text. The
+  clipboard entry carries both `text/html` (the rendered document) and
+  `text/plain` (the Markdown source), so pasting into Gmail, Slack, Word, or
+  Notion keeps headings, bold, lists, links, code, and tables, while pasting
+  into a plain editor yields the raw Markdown. Falls back to a plain-text copy
+  where the rich clipboard API is unavailable.
 - **Paste images straight into a document.** Pasting an image from the clipboard
   while editing saves it into an `assets/` folder next to the file and inserts a
   relative `![](assets/…)` embed at the cursor. Works in both the source and
